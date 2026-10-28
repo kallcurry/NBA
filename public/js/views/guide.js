@@ -188,7 +188,7 @@ export function renderGuide({ day = null } = {}) {
       <span class="legal-note__icon">${icon('info')}</span>
       <div>
         <strong>关于直播源</strong>
-        <p>场边不收录、不托管、不推荐任何非官方直播源。页面中的“观看”入口只指向 NBA、ESPN、NBC、Peacock、腾讯体育、咪咕视频、央视体育等官方或持权平台。版权归属各权利人所有。</p>
+        <p>场边不收录、不托管、不推荐任何非官方直播源，包括声称免费的第三方聚合站和盗链站。页面中的“观看”入口只指向 NBA、ESPN、NBC、Peacock、腾讯体育、咪咕视频、央视体育等官方或持权平台。版权归属各权利人所有。</p>
       </div>
     </div>
   </div>`;

@@ -12,6 +12,7 @@ import {
   isFinal,
   isLive,
   relativeDay,
+  readableTeamColor,
   relativeTime,
   statusText,
   todayStr,
@@ -193,6 +194,80 @@ function renderStale(stale, onRetry = true) {
   </div>`;
 }
 
+
+function renderTodayCharts(games, index = '04') {
+  const scored = games.filter((g) => g.status.state !== 'pre' && (g.away.score || g.home.score));
+  if (!scored.length) return '';
+  const margins = scored.map((g) => ({ game: g, margin: g.home.score - g.away.score }));
+  const maxMargin = Math.max(1, ...margins.map((m) => Math.abs(m.margin)));
+  const totals = scored
+    .map((g) => ({ game: g, total: g.away.score + g.home.score }))
+    .sort((a, b) => b.total - a.total);
+  const maxTotal = Math.max(1, ...totals.map((t) => t.total));
+  return `<section class="game-section today-analytics">
+    ${sectionHeader({
+      index,
+      title: '今日数据观察',
+      meta: '不用读文字，直接看图',
+    })}
+    <div class="today-charts">
+      <div class="chart-panel">
+        <div class="chart-head">
+          <div><span class="chart-kicker">分差</span><h3>哪些比赛最胶着</h3></div>
+          <span class="chart-note">主队视角</span>
+        </div>
+        <div class="diverging-list">
+          ${margins
+            .map(({ game, margin }) => {
+              const pct = (Math.abs(margin) / maxMargin) * 46;
+              const homeLead = margin > 0;
+              const color = readableTeamColor((homeLead ? game.home : game.away).color);
+              return `<div class="diverging-row">
+                <span class="diverging-team">${game.away.abbr}</span>
+                <div class="diverging-track">
+                  <span class="diverging-center"></span>
+                  ${
+                    margin === 0
+                      ? ''
+                      : `<span class="diverging-bar" style="width:${pct}%;left:${
+                          homeLead ? 50 : 50 - pct
+                        }%;background:${color}"></span>`
+                  }
+                </div>
+                <span class="diverging-team diverging-team--home">${game.home.abbr}</span>
+                <strong class="diverging-value ${margin > 0 ? 'is-home' : margin < 0 ? 'is-away' : ''}">${
+                  margin === 0 ? '平' : `${margin > 0 ? '+' : ''}${margin}`
+                }</strong>
+              </div>`;
+            })
+            .join('')}
+        </div>
+        <div class="chart-foot-note">条形越长，分差越大；颜色代表领先球队。</div>
+      </div>
+      <div class="chart-panel">
+        <div class="chart-head">
+          <div><span class="chart-kicker">总得分</span><h3>今天的进攻火力</h3></div>
+          <span class="chart-note">两队合计</span>
+        </div>
+        <div class="total-list">
+          ${totals
+            .map(
+              ({ game, total }) => `<div class="total-row">
+                <span class="total-label">${game.away.abbr}<i>–</i>${game.home.abbr}</span>
+                <span class="total-track"><i style="width:${(total / maxTotal) * 100}%;background:${readableTeamColor(
+                  game.home.color,
+                )}"></i></span>
+                <strong>${total}</strong>
+              </div>`,
+            )
+            .join('')}
+        </div>
+        <div class="chart-foot-note">合计得分越高，比赛节奏通常越快。</div>
+      </div>
+    </div>
+  </section>`;
+}
+
 function sectionFor(games, index, title, meta, opts) {
   return `<section class="game-section">
     ${sectionHeader({ index, title, meta })}
@@ -303,6 +378,7 @@ export function renderToday({
         ${liveSection}
         ${upcomingSection}
         ${finalSection}
+        ${renderTodayCharts(games, String(++index).padStart(2, '0'))}
 
         ${
           loading

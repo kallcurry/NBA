@@ -157,8 +157,8 @@ function normalizeCompetitor(c) {
     record: overall?.summary || '',
     winner: Boolean(c.winner),
     homeAway: c.homeAway,
-    linescores: (c.linescores || []).map((l) => ({
-      period: num(l.period),
+    linescores: (c.linescores || []).map((l, index) => ({
+      period: num(l.period) || index + 1,
       value: num(l.value ?? l.displayValue),
       display: l.displayValue ?? String(l.value ?? ''),
     })),
@@ -426,6 +426,26 @@ function normalizeSeries(series = []) {
   };
 }
 
+function normalizeWinProbability(winprobability = [], plays = []) {
+  const playMap = new Map((plays || []).map((p) => [String(p.id), p]));
+  return (winprobability || [])
+    .map((w) => {
+      const play = playMap.get(String(w.playId));
+      const home = Number(w.homeWinPercentage);
+      if (!Number.isFinite(home)) return null;
+      return {
+        playId: String(w.playId || ''),
+        home: Math.round(home * 1000) / 10,
+        away: Math.round((1 - home) * 1000) / 10,
+        period: num(play?.period?.number),
+        clock: play?.clock?.displayValue || '',
+        awayScore: num(play?.awayScore),
+        homeScore: num(play?.homeScore),
+      };
+    })
+    .filter(Boolean);
+}
+
 function normalizeSummary(id, data) {
   const header = data.header?.competitions?.[0] || {};
   const home = header.competitors?.find((c) => c.homeAway === 'home');
@@ -452,6 +472,7 @@ function normalizeSummary(id, data) {
     boxscore: { teams: boxTeams, players: boxPlayers },
     leaders: normalizeLeaders(data.leaders),
     plays: notable,
+    winprobability: normalizeWinProbability(data.winprobability, data.plays),
     injuries: normalizeInjuries(data.injuries),
     series: normalizeSeries(data.seasonseries),
     odds: normalizeOdds(data.odds),

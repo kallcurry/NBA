@@ -9,8 +9,8 @@
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone"],
   "orientation": "any",
-  "background_color": "#090a0c",
-  "theme_color": "#090a0c",
+  "background_color": "#0e1526",
+  "theme_color": "#0e1526",
   "categories": ["sports", "news"],
   "icons": [
     {

@@ -229,7 +229,7 @@ export function renderTeamSheet({
     name: abbr,
     displayName: abbr,
     logo: null,
-    color: '#ff5a1f',
+    color: '#6d8cff',
   };
   const stats = entry?.stats || {};
   const confName = found?.conf?.abbreviation === 'East' ? '东部' : '西部';

@@ -241,7 +241,7 @@ function renderSidebar() {
     </a>
 
     <div class="sidebar__foot">
-      <span>数据 ESPN</span><i></i><span>北京时间</span><i></i><span>v1.0</span>
+      <span>数据 ESPN</span><i></i><span>北京时间</span><i></i><span>v1.1.0</span>
     </div>
   </div>`;
 }
@@ -327,7 +327,13 @@ function renderShell() {
 
 function updateTopbarMeta() {
   const meta = $('[data-topbar-meta]');
-  if (meta) meta.textContent = app.refreshing || app.dayLoading ? '更新中…' : timeAgoText(app.lastUpdated);
+  if (meta) {
+    const base = app.currentBase;
+    if (app.refreshing || app.dayLoading || app.standingsLoading) meta.textContent = '更新中…';
+    else if (app.lastUpdated) meta.textContent = timeAgoText(app.lastUpdated);
+    else if (base?.name === 'teams') meta.textContent = '载入排名…';
+    else meta.textContent = '等待数据';
+  }
   const pill = $('[data-live-pill]');
   if (pill) {
     const live = app.day?.games?.filter(isLive).length || 0;
@@ -534,6 +540,7 @@ async function ensureStandings({ force = false } = {}) {
   app.standingsError = null;
   try {
     app.standings = await api.getStandings();
+    app.lastUpdated = Date.now();
     return app.standings;
   } catch (err) {
     app.standingsError = err?.message || '排名加载失败';

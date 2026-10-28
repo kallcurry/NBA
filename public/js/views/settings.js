@@ -153,9 +153,9 @@ export function renderSettings({
       </section>
 
       <section class="settings-section settings-section--about">
-        <div class="settings-section__head"><h3>关于场边</h3><span>v1.0</span></div>
+        <div class="settings-section__head"><h3>关于场边</h3><span>v1.1.0</span></div>
         <p class="settings-about">
-          场边是一个本地优先的 NBA 观赛助手：赛程、比分和比赛数据来自 ESPN 公开接口；直播入口只指向官方与持权平台。
+          场边是一个本地优先的 NBA 观赛助手：赛程、比分和比赛数据来自 ESPN 公开接口，球员中文名来自 NBA 中国官方球员名单；直播入口只指向官方与持权平台。
         </p>
         <div class="about-links">
           <a href="#/guide" class="text-link">观赛指南 ${icon('arrow-right')}</a>

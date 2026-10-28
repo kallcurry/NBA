@@ -22,6 +22,7 @@ import {
   todayStr,
 } from '../data.js';
 import { broadcastChips, emptyState, errorState, icon, liveBadge, logo, skeletonRows } from '../ui.js';
+import { localizePlayerNames, playerCn } from '../player-names.js';
 
 export const detailUi = {
   tab: null,
@@ -139,7 +140,7 @@ export function renderGameDetail({
   hasReminder = false,
 }) {
   const g = pickGame(game, summary);
-  const activeTab = tab || (g.status.state === 'pre' ? 'info' : 'box');
+  const activeTab = tab || (g.status.state === 'pre' ? 'info' : 'insight');
   const awayColor = readableTeamColor(g.away.color);
   const homeColor = readableTeamColor(g.home.color);
   const teamNames = `${cnName(g.away)} vs ${cnName(g.home)}`;
@@ -205,12 +206,15 @@ export function renderGameDetail({
     </div>
 
     <div class="detail-tabs" role="tablist" aria-label="比赛详情">
+      <button role="tab" class="detail-tab ${activeTab === 'insight' ? 'is-active' : ''}" data-action="detail-tab" data-tab="insight" aria-selected="${
+        activeTab === 'insight'
+      }">${icon('chart')}比赛分析</button>
       <button role="tab" class="detail-tab ${activeTab === 'box' ? 'is-active' : ''}" data-action="detail-tab" data-tab="box" aria-selected="${
         activeTab === 'box'
-      }">${icon('chart')}比赛数据</button>
+      }">${icon('list')}球员数据</button>
       <button role="tab" class="detail-tab ${activeTab === 'plays' ? 'is-active' : ''}" data-action="detail-tab" data-tab="plays" aria-selected="${
         activeTab === 'plays'
-      }">${icon('list')}文字直播 ${isLive(g) ? '<i class="tab-live-dot"></i>' : ''}</button>
+      }">${icon('flame')}文字直播 ${isLive(g) ? '<i class="tab-live-dot"></i>' : ''}</button>
       <button role="tab" class="detail-tab ${activeTab === 'info' ? 'is-active' : ''}" data-action="detail-tab" data-tab="info" aria-selected="${
         activeTab === 'info'
       }">${icon('info')}${g.status.state === 'pre' ? '赛前情报' : '比赛信息'}</button>
@@ -235,7 +239,8 @@ function renderTab({ game, summary, tab, error }) {
   if (!summary) return `<div class="detail-loading">${skeletonRows(3, 'box')}</div>`;
   if (tab === 'plays') return renderPlays(summary, game);
   if (tab === 'info') return renderInfo(summary, game);
-  return renderBox(summary, game);
+  if (tab === 'box') return renderBox(summary, game);
+  return renderInsight(summary, game);
 }
 
 /* ------------------------------------------------------------------ */
@@ -263,8 +268,8 @@ function leaderCards(summary) {
           }</span>
           <span class="leader-card__copy">
             <span class="leader-card__value">${c.value} <em>${c.category}</em></span>
-            <span class="leader-card__name">${c.name}</span>
-            <span class="leader-card__team">${c.abbr}</span>
+            <span class="leader-card__name">${escapeHtml(playerCn(c.name))}</span>
+            <span class="leader-card__en">${escapeHtml(c.name)} · ${c.abbr}</span>
           </span>
         </div>`,
       )
@@ -332,6 +337,501 @@ function compareStats(summary, game) {
   </section>`;
 }
 
+/* ------------------------------------------------------------------ */
+/* Visual analytics                                                    */
+/* ------------------------------------------------------------------ */
+function statNum(stats, key) {
+  const value = Number.parseFloat(stats?.[key]);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function parsePair(stats, key) {
+  const raw = String(stats?.[key] || '0-0');
+  const [made, attempted] = raw.split('-').map((v) => Number.parseInt(v, 10) || 0);
+  return { made, attempted };
+}
+
+function teamPair(summary) {
+  const teams = summary.boxscore?.teams || [];
+  if (teams.length < 2) return null;
+  return { away: teams[0], home: teams[1] };
+}
+
+function metricWidth(value, max) {
+  if (!Number.isFinite(value) || !Number.isFinite(max) || max <= 0) return 4;
+  return Math.max(4, Math.min(100, (value / max) * 100));
+}
+
+function renderKpiDual({ label, sub, awayText, homeText, awayPct, homePct, game }) {
+  return `<div class="kpi-card">
+    <div class="kpi-card__head"><span>${label}</span><em>${sub || ''}</em></div>
+    <div class="kpi-card__rows">
+      <div class="kpi-card__row"><span><i style="background:${readableTeamColor(game.away.color)}"></i>${
+        game.away.abbr
+      }</span><strong>${awayText}</strong></div>
+      <div class="kpi-card__row"><span><i style="background:${readableTeamColor(game.home.color)}"></i>${
+        game.home.abbr
+      }</span><strong>${homeText}</strong></div>
+    </div>
+    <div class="kpi-card__track">
+      <span class="kpi-card__half"><i style="width:${awayPct}%;background:${readableTeamColor(game.away.color)}"></i></span>
+      <span class="kpi-card__half"><i style="width:${homePct}%;background:${readableTeamColor(game.home.color)}"></i></span>
+    </div>
+  </div>`;
+}
+
+function renderKpis(summary, game) {
+  const pair = teamPair(summary);
+  const margin = Math.abs(game.home.score - game.away.score);
+  const leader = game.home.score === game.away.score ? null : game.home.score > game.away.score ? game.home : game.away;
+  const largest = pair ? Math.max(statNum(pair.away.stats, 'largestLead'), statNum(pair.home.stats, 'largestLead')) : 0;
+  const fgA = pair ? statNum(pair.away.stats, 'fieldGoalPct') : 0;
+  const fgH = pair ? statNum(pair.home.stats, 'fieldGoalPct') : 0;
+  const threeA = pair ? parsePair(pair.away.stats, 'threePointFieldGoalsMade-threePointFieldGoalsAttempted') : { made: 0, attempted: 0 };
+  const threeH = pair ? parsePair(pair.home.stats, 'threePointFieldGoalsMade-threePointFieldGoalsAttempted') : { made: 0, attempted: 0 };
+  const threePctA = pair ? statNum(pair.away.stats, 'threePointFieldGoalPct') : 0;
+  const threePctH = pair ? statNum(pair.home.stats, 'threePointFieldGoalPct') : 0;
+  const rebA = pair ? statNum(pair.away.stats, 'totalRebounds') : 0;
+  const rebH = pair ? statNum(pair.home.stats, 'totalRebounds') : 0;
+  const astA = pair ? statNum(pair.away.stats, 'assists') : 0;
+  const astH = pair ? statNum(pair.home.stats, 'assists') : 0;
+  const fgMax = Math.max(fgA, fgH, 1);
+  const threeMax = Math.max(threePctA, threePctH, 1);
+  const rebMax = Math.max(rebA, rebH, 1);
+
+  return `<div class="analytics-kpis">
+    <div class="kpi-card kpi-card--lead">
+      <div class="kpi-card__head"><span>${isFinal(game) ? '最终分差' : '当前分差'}</span><em>${
+        largest ? `最大领先 ${largest}` : '比分'
+      }</em></div>
+      <div class="kpi-card__lead">
+        <strong>${margin === 0 ? '平' : margin}</strong>
+        <span>${leader ? `${cnName(leader)}领先` : '双方战平'}</span>
+      </div>
+      <div class="kpi-card__lead-line"><i style="width:100%;background:${leader ? readableTeamColor(leader.color) : 'var(--accent)'}"></i></div>
+    </div>
+    ${renderKpiDual({
+      label: '投篮命中率',
+      sub: 'FG%',
+      awayText: `${fgA.toFixed(1)}%`,
+      homeText: `${fgH.toFixed(1)}%`,
+      awayPct: metricWidth(fgA, fgMax),
+      homePct: metricWidth(fgH, fgMax),
+      game,
+    })}
+    ${renderKpiDual({
+      label: '三分球',
+      sub: '3PT',
+      awayText: `${threeA.made}/${threeA.attempted}`,
+      homeText: `${threeH.made}/${threeH.attempted}`,
+      awayPct: metricWidth(threePctA, threeMax),
+      homePct: metricWidth(threePctH, threeMax),
+      game,
+    })}
+    ${renderKpiDual({
+      label: '篮板 / 助攻',
+      sub: 'REB / AST',
+      awayText: `${rebA} / ${astA}`,
+      homeText: `${rebH} / ${astH}`,
+      awayPct: metricWidth(rebA, rebMax),
+      homePct: metricWidth(rebH, rebMax),
+      game,
+    })}
+  </div>`;
+}
+
+function trendPoints(summary, game) {
+  const wp = (summary.winprobability || []).filter((d) => Number.isFinite(d.home));
+  if (wp.length > 2) {
+    return {
+      mode: 'winprob',
+      values: wp.map((d) => d.home),
+      periods: wp.map((d) => d.period),
+      labels: { away: `${(100 - wp.at(-1).home).toFixed(1)}%`, home: `${wp.at(-1).home.toFixed(1)}%` },
+    };
+  }
+  const scoring = (summary.plays || []).filter((p) => p.scoring);
+  if (scoring.length > 2) {
+    const margins = scoring.map((p) => p.homeScore - p.awayScore);
+    const max = Math.max(...margins.map(Math.abs), 1);
+    const last = margins.at(-1) || 0;
+    const leader = last === 0 ? null : last > 0 ? game.home : game.away;
+    return {
+      mode: 'margin',
+      values: margins.map((m) => 50 + (m / max) * 45),
+      periods: scoring.map((p) => p.period),
+      labels: { away: `${game.away.score}`, home: `${game.home.score}` },
+      margin: Math.abs(last),
+      marginLeader: leader,
+    };
+  }
+  return null;
+}
+
+function renderTrend(summary, game) {
+  const data = trendPoints(summary, game);
+  if (!data) return '';
+  const isWinProb = data.mode === 'winprob';
+  const awayColor = readableTeamColor(game.away.color);
+  const homeColor = readableTeamColor(game.home.color);
+  const W = 800;
+  const H = 220;
+  const n = data.values.length;
+  const xAt = (i) => (n <= 1 ? 0 : (i / (n - 1)) * W);
+  const yAt = (v) => H - (v / 100) * H;
+  const line = data.values.map((v, i) => `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(2)} ${yAt(v).toFixed(2)}`).join(' ');
+  const endX = xAt(n - 1);
+  const endY = yAt(data.values.at(-1));
+  const homeArea = `M0 ${H} L${line.replace(/^M/, '')} L${W} ${H} Z`.replace('L0 ', 'L0 ');
+  const awayArea = `M0 0 L${line.replace(/^M/, '')} L${W} 0 Z`;
+  const periodStarts = [];
+  let lastPeriod = null;
+  for (let i = 0; i < data.periods.length; i++) {
+    const p = data.periods[i];
+    if (p && p !== lastPeriod) {
+      periodStarts.push({ period: p, left: (xAt(i) / W) * 100 });
+      lastPeriod = p;
+    }
+  }
+  const grid = [0, 25, 50, 75, 100]
+    .map((v) => `<line x1="0" y1="${yAt(v)}" x2="${W}" y2="${yAt(v)}" class="${v === 50 ? 'trend-grid trend-grid--mid' : 'trend-grid'}" />`)
+    .join('');
+  const periodLines = periodStarts
+    .filter((p) => p.left > 1 && p.left < 99)
+    .map((p) => `<line x1="${(p.left / 100) * W}" y1="0" x2="${(p.left / 100) * W}" y2="${H}" class="trend-period-line" />`)
+    .join('');
+  const periodLabels = periodStarts
+    .map(
+      (p) =>
+        `<span style="left:${Math.min(98, Math.max(2, p.left))}%">${
+          p.period > 4 ? 'OT' : `Q${p.period}`
+        }</span>`,
+    )
+    .join('');
+  const endpointLabel = isWinProb
+    ? `${game.home.abbr} ${data.values.at(-1).toFixed(1)}%`
+    : data.margin === 0
+      ? '平分'
+      : `${data.marginLeader?.abbr || ''} +${data.margin}`;
+  const endTop = (endY / H) * 100;
+  const endTransform = endTop < 15 ? 'translate(-100%, 0)' : endTop > 85 ? 'translate(-100%, -100%)' : 'translate(-100%, -50%)';
+
+  return `<section class="chart-panel chart-panel--trend">
+    <div class="chart-head">
+      <div>
+        <span class="chart-kicker">${isWinProb ? '胜率走势' : '分差走势'}</span>
+        <h3>${isWinProb ? '谁在掌控比赛' : '比分如何拉开'}</h3>
+      </div>
+      <div class="chart-legend">
+        <span><i style="background:${awayColor}"></i>${game.away.abbr}</span>
+        <span><i style="background:${homeColor}"></i>${game.home.abbr}</span>
+      </div>
+    </div>
+    <div class="trend-chart">
+      <div class="trend-y"><span>100</span><span>50</span><span>0</span></div>
+      <div class="trend-plot">
+        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${isWinProb ? '主队胜率走势' : '分差走势'}">
+          <rect width="${W}" height="${H}" fill="rgba(127,151,214,.045)" />
+          <path d="${awayArea}" fill="${rgba(awayColor, 0.18)}" />
+          <path d="${homeArea}" fill="${rgba(homeColor, 0.3)}" />
+          ${grid}
+          ${periodLines}
+          <path d="${line}" fill="none" stroke="#f4f7ff" stroke-width="2" vector-effect="non-scaling-stroke" />
+          <circle cx="${endX}" cy="${endY}" r="4" fill="#f4f7ff" stroke="${homeColor}" stroke-width="2" vector-effect="non-scaling-stroke" />
+        </svg>
+        <span class="trend-endpoint" style="left:${(endX / W) * 100}%;top:${endTop}%;transform:${endTransform}">${endpointLabel}</span>
+      </div>
+    </div>
+    <div class="trend-x">${periodLabels}<span class="trend-x__now">现在</span></div>
+    <div class="trend-foot">
+      <span><i style="background:${awayColor}"></i>${game.away.abbr} <b>${data.labels.away}</b></span>
+      <span><i style="background:${homeColor}"></i>${game.home.abbr} <b>${data.labels.home}</b></span>
+      <em>${isWinProb ? 'ESPN 实时模型' : '按得分回合计算'}</em>
+    </div>
+  </section>`;
+}
+
+function renderQuarterChart(game) {
+  const periods = Math.max(
+    4,
+    ...(game.away.linescores || []).map((l) => l.period),
+    ...(game.home.linescores || []).map((l) => l.period),
+  );
+  const away = game.away.linescores || [];
+  const home = game.home.linescores || [];
+  if (!away.some((l) => l.value) && !home.some((l) => l.value)) return '';
+  const max = Math.max(1, ...away.map((l) => l.value), ...home.map((l) => l.value));
+  const groups = Array.from({ length: periods }, (_, i) => i + 1)
+    .map((p) => {
+      const a = away.find((l) => l.period === p)?.value || 0;
+      const h = home.find((l) => l.period === p)?.value || 0;
+      return `<div class="quarter-group">
+        <div class="quarter-bars">
+          <span class="quarter-bar quarter-bar--away" style="height:${(a / max) * 100}%;background:${readableTeamColor(
+            game.away.color,
+          )}"><b>${a || ''}</b></span>
+          <span class="quarter-bar quarter-bar--home" style="height:${(h / max) * 100}%;background:${readableTeamColor(
+            game.home.color,
+          )}"><b>${h || ''}</b></span>
+        </div>
+        <span class="quarter-label">${p > 4 ? `OT${p - 4}` : `Q${p}`}</span>
+      </div>`;
+    })
+    .join('');
+  return `<section class="chart-panel chart-panel--quarter">
+    <div class="chart-head">
+      <div><span class="chart-kicker">分节得分</span><h3>每节谁更高效</h3></div>
+      <div class="chart-legend">
+        <span><i style="background:${readableTeamColor(game.away.color)}"></i>${game.away.abbr}</span>
+        <span><i style="background:${readableTeamColor(game.home.color)}"></i>${game.home.abbr}</span>
+      </div>
+    </div>
+    <div class="quarter-chart">${groups}</div>
+  </section>`;
+}
+
+function radarValues(summary, game) {
+  const pair = teamPair(summary);
+  if (!pair) return null;
+  const a = pair.away.stats;
+  const h = pair.home.stats;
+  const axes = [
+    { label: '得分', away: game.away.score, home: game.home.score },
+    { label: '投篮', away: statNum(a, 'fieldGoalPct'), home: statNum(h, 'fieldGoalPct') },
+    { label: '三分', away: statNum(a, 'threePointFieldGoalPct'), home: statNum(h, 'threePointFieldGoalPct') },
+    { label: '篮板', away: statNum(a, 'totalRebounds'), home: statNum(h, 'totalRebounds') },
+    { label: '助攻', away: statNum(a, 'assists'), home: statNum(h, 'assists') },
+    {
+      label: '防守',
+      away: statNum(a, 'steals') + statNum(a, 'blocks'),
+      home: statNum(h, 'steals') + statNum(h, 'blocks'),
+    },
+  ];
+  return axes.map((axis) => {
+    const max = Math.max(axis.away, axis.home, 1);
+    return {
+      ...axis,
+      awayPct: Math.max(12, (axis.away / max) * 100),
+      homePct: Math.max(12, (axis.home / max) * 100),
+    };
+  });
+}
+
+function radarPolygon(values, key, cx, cy, radius) {
+  return values
+    .map((v, i) => {
+      const angle = (Math.PI * 2 * i) / values.length - Math.PI / 2;
+      const r = (v[key] / 100) * radius;
+      return `${(cx + Math.cos(angle) * r).toFixed(2)},${(cy + Math.sin(angle) * r).toFixed(2)}`;
+    })
+    .join(' ');
+}
+
+function renderRadar(summary, game) {
+  const values = radarValues(summary, game);
+  if (!values) return '';
+  const cx = 165;
+  const cy = 145;
+  const radius = 92;
+  const rings = [25, 50, 75, 100]
+    .map((p) => {
+      const pts = values
+        .map((_, i) => {
+          const angle = (Math.PI * 2 * i) / values.length - Math.PI / 2;
+          const r = (p / 100) * radius;
+          return `${(cx + Math.cos(angle) * r).toFixed(2)},${(cy + Math.sin(angle) * r).toFixed(2)}`;
+        })
+        .join(' ');
+      return `<polygon points="${pts}" class="radar-ring" />`;
+    })
+    .join('');
+  const spokes = values
+    .map((_, i) => {
+      const angle = (Math.PI * 2 * i) / values.length - Math.PI / 2;
+      return `<line x1="${cx}" y1="${cy}" x2="${(cx + Math.cos(angle) * radius).toFixed(2)}" y2="${(
+        cy +
+        Math.sin(angle) * radius
+      ).toFixed(2)}" class="radar-spoke" />`;
+    })
+    .join('');
+  const labels = values
+    .map((v, i) => {
+      const angle = (Math.PI * 2 * i) / values.length - Math.PI / 2;
+      const lx = cx + Math.cos(angle) * (radius + 24);
+      const ly = cy + Math.sin(angle) * (radius + 22);
+      const anchor = Math.abs(Math.cos(angle)) < 0.2 ? 'middle' : Math.cos(angle) > 0 ? 'start' : 'end';
+      return `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" text-anchor="${anchor}" class="radar-label">${v.label}</text>`;
+    })
+    .join('');
+  return `<section class="chart-panel chart-panel--radar">
+    <div class="chart-head">
+      <div><span class="chart-kicker">球队能力</span><h3>六维对比</h3></div>
+      <span class="chart-note">归一化</span>
+    </div>
+    <div class="radar-wrap">
+      <svg viewBox="0 0 330 290" role="img" aria-label="球队能力雷达图">
+        ${rings}${spokes}
+        <polygon points="${radarPolygon(values, 'awayPct', cx, cy, radius)}" fill="${rgba(
+          readableTeamColor(game.away.color),
+          0.18,
+        )}" stroke="${readableTeamColor(game.away.color)}" stroke-width="2" />
+        <polygon points="${radarPolygon(values, 'homePct', cx, cy, radius)}" fill="${rgba(
+          readableTeamColor(game.home.color),
+          0.18,
+        )}" stroke="${readableTeamColor(game.home.color)}" stroke-width="2" />
+        <circle cx="${cx}" cy="${cy}" r="2" class="radar-center" />
+        ${labels}
+      </svg>
+    </div>
+    <div class="trend-foot">
+      <span><i style="background:${readableTeamColor(game.away.color)}"></i>${game.away.abbr} <b>${game.away.score}</b></span>
+      <span><i style="background:${readableTeamColor(game.home.color)}"></i>${game.home.abbr} <b>${game.home.score}</b></span>
+      <em>得分 · 投篮 · 三分 · 篮板 · 助攻 · 防守</em>
+    </div>
+  </section>`;
+}
+
+function topScorers(summary, teamId, limit = 5) {
+  const block = (summary.boxscore?.players || []).find((p) => String(p.teamId) === String(teamId));
+  if (!block) return [];
+  return (block.athletes || [])
+    .filter((a) => !a.didNotPlay)
+    .map((a) => ({ ...a, points: Number.parseInt(a.stats?.PTS, 10) || 0 }))
+    .filter((a) => a.points > 0)
+    .sort((a, b) => b.points - a.points)
+    .slice(0, limit);
+}
+
+function renderScorers(summary, game) {
+  const away = topScorers(summary, game.away.id);
+  const home = topScorers(summary, game.home.id);
+  if (!away.length && !home.length) return '';
+  const max = Math.max(1, ...away.map((p) => p.points), ...home.map((p) => p.points));
+  const teamBlock = (team, players, color) => `<div class="scorers-team">
+    <div class="scorers-team__head">
+      ${logo(team, 'sm')}<strong>${cnName(team)}</strong><span>${team.abbr}</span>
+    </div>
+    ${players
+      .map(
+        (p, i) => `<div class="scorer-row">
+          <span class="scorer-rank">${i + 1}</span>
+          <span class="scorer-copy">
+            <b>${escapeHtml(playerCn(p.name))}</b>
+            <em>${escapeHtml(p.name)}</em>
+          </span>
+          <strong class="scorer-points">${p.points}</strong>
+          <span class="scorer-track"><i style="width:${metricWidth(p.points, max)}%;background:${color}"></i></span>
+        </div>`,
+      )
+      .join('')}
+  </div>`;
+  return `<section class="chart-panel chart-panel--scorers">
+    <div class="chart-head">
+      <div><span class="chart-kicker">主要得分点</span><h3>谁在得分</h3></div>
+      <span class="chart-note">PTS</span>
+    </div>
+    <div class="scorers-grid">
+      ${teamBlock(game.away, away, readableTeamColor(game.away.color))}
+      ${teamBlock(game.home, home, readableTeamColor(game.home.color))}
+    </div>
+  </section>`;
+}
+
+function efficiencyMetrics(summary, game) {
+  const pair = teamPair(summary);
+  if (!pair) return null;
+  const build = (teamStats, points, oppStats) => {
+    const fga = parsePair(teamStats.stats, 'fieldGoalsMade-fieldGoalsAttempted').attempted;
+    const fgm = parsePair(teamStats.stats, 'fieldGoalsMade-fieldGoalsAttempted').made;
+    const tpm = parsePair(teamStats.stats, 'threePointFieldGoalsMade-threePointFieldGoalsAttempted').made;
+    const fta = parsePair(teamStats.stats, 'freeThrowsMade-freeThrowsAttempted').attempted;
+    const tov = statNum(teamStats.stats, 'turnovers');
+    const orb = statNum(teamStats.stats, 'offensiveRebounds');
+    const oppDrb = statNum(oppStats.stats, 'defensiveRebounds');
+    const poss = fga + 0.44 * fta + tov;
+    return {
+      efg: fga ? ((fgm + 0.5 * tpm) / fga) * 100 : 0,
+      ts: poss ? (points / (2 * (fga + 0.44 * fta))) * 100 : 0,
+      tovPct: poss ? (tov / poss) * 100 : 0,
+      orbPct: orb + oppDrb ? (orb / (orb + oppDrb)) * 100 : 0,
+    };
+  };
+  return {
+    away: build(pair.away, game.away.score, pair.home),
+    home: build(pair.home, game.home.score, pair.away),
+  };
+}
+
+function renderEfficiency(summary, game) {
+  const metrics = efficiencyMetrics(summary, game);
+  if (!metrics) return '';
+  const rows = [
+    { key: 'efg', label: 'eFG%', desc: '投篮效率' },
+    { key: 'ts', label: 'TS%', desc: '真实命中率' },
+    { key: 'tovPct', label: 'TOV%', desc: '失误率', inverse: true },
+    { key: 'orbPct', label: 'ORB%', desc: '前场篮板率' },
+  ];
+  return `<section class="chart-panel chart-panel--efficiency">
+    <div class="chart-head">
+      <div><span class="chart-kicker">效率面板</span><h3>进阶四因子</h3></div>
+      <span class="chart-note">进阶</span>
+    </div>
+    <div class="efficiency-list">
+      ${rows
+        .map((row) => {
+          const a = metrics.away[row.key];
+          const h = metrics.home[row.key];
+          const aMax = Math.max(a, h, 1);
+          const aBetter = row.inverse ? a < h : a > h;
+          const hBetter = row.inverse ? h < a : h > a;
+          return `<div class="efficiency-row">
+            <div class="efficiency-row__head"><strong>${row.label}</strong><span>${row.desc}</span></div>
+            <span class="efficiency-value ${aBetter ? 'is-better' : ''}">${a.toFixed(1)}</span>
+            <div class="efficiency-bars">
+              <span style="width:${metricWidth(a, aMax)}%;background:${readableTeamColor(game.away.color)}"></span>
+              <span style="width:${metricWidth(h, aMax)}%;background:${readableTeamColor(game.home.color)}"></span>
+            </div>
+            <span class="efficiency-value ${hBetter ? 'is-better' : ''}">${h.toFixed(1)}</span>
+          </div>`;
+        })
+        .join('')}
+    </div>
+    <div class="efficiency-foot">eFG% 投篮效率 · TS% 真实命中率 · TOV% 失误率 · ORB% 前场篮板率</div>
+  </section>`;
+}
+
+function renderInsight(summary, game) {
+  if (game.status.state === 'pre') {
+    return emptyState({
+      iconName: 'chart',
+      title: '比赛还没开始',
+      description: '开赛后这里会出现胜率走势、分节得分、球队雷达和主要得分点图表。',
+      compact: true,
+    });
+  }
+  const hasBox = Boolean(teamPair(summary));
+  const quarter = renderQuarterChart(game);
+  const radar = renderRadar(summary, game);
+  const compare = compareStats(summary, game);
+  const efficiency = renderEfficiency(summary, game);
+  return `<div class="insight-tab">
+    ${renderKpis(summary, game)}
+    ${renderTrend(summary, game)}
+    ${
+      quarter || radar
+        ? `<div class="analytics-duo">${quarter}${radar}</div>`
+        : ''
+    }
+    ${renderScorers(summary, game)}
+    ${
+      hasBox && (compare || efficiency)
+        ? `<div class="analytics-duo analytics-duo--equal">${compare}${efficiency}</div>`
+        : ''
+    }
+  </div>`;
+}
+
+
 function boxTable(teamBlock, game, which) {
   if (!teamBlock) return '';
   const team = which === 'away' ? game.away : game.home;
@@ -358,9 +858,18 @@ function boxTable(teamBlock, game, which) {
             .map(
               (p) => `<tr class="${p.didNotPlay ? 'is-dnp' : ''} ${p.starter ? 'is-starter' : ''}">
                 <td class="box-table__player">
+                  <span class="player-cell">
                   <span class="player-num">${p.jersey || ''}</span>
-                  <span class="player-name">${p.name}${p.starter ? '<i class="starter-dot" title="首发"></i>' : ''}</span>
+                  <span class="player-meta">
+                    <span class="player-name">${escapeHtml(playerCn(p.name))}${p.starter ? '<i class="starter-dot" title="首发"></i>' : ''}</span>
+                    ${
+                      playerCn(p.name) !== p.name
+                        ? `<span class="player-en">${escapeHtml(p.name)}</span>`
+                        : ''
+                    }
+                  </span>
                   <span class="player-pos">${p.position || ''}</span>
+                  </span>
                 </td>
                 ${
                   p.didNotPlay
@@ -406,8 +915,6 @@ function renderBox(summary, game) {
   const homeBlock = available.find((p) => p.teamId === game.home.id);
   const actualWhich = block === awayBlock ? 'away' : 'home';
   return `<div class="box-tab">
-    ${leaderCards(summary)}
-    ${compareStats(summary, game)}
     <div class="box-switch">
       <div class="segmented" role="tablist" aria-label="选择球队">
         <button role="tab" class="segmented__btn ${actualWhich === 'away' ? 'is-active' : ''}" data-action="detail-team" data-team="away" aria-selected="${
@@ -467,7 +974,7 @@ function renderPlays(summary, game) {
                 (p) => `<div class="play ${p.scoring ? 'is-scoring' : ''}">
                   <span class="play__clock">${escapeHtml(p.clock)}</span>
                   <span class="play__body">
-                    <span class="play__text">${escapeHtml(p.text)}</span>
+                    <span class="play__text">${escapeHtml(localizePlayerNames(p.text))}</span>
                     ${
                       p.scoring
                         ? `<span class="play__score">${game.away.abbr} ${p.awayScore} <i>–</i> ${p.homeScore} ${game.home.abbr}</span>`
@@ -532,7 +1039,12 @@ function injuriesBlock(summary, game) {
               (p) => `<div class="injury-row">
                 <span class="injury-row__avatar">${p.headshot ? `<img src="${p.headshot}" alt="" loading="lazy" />` : ''}</span>
                 <span class="injury-row__copy">
-                  <span class="injury-row__name">${escapeHtml(p.name)}</span>
+                  <span class="injury-row__name">${escapeHtml(playerCn(p.name))}</span>
+                  ${
+                    playerCn(p.name) !== p.name
+                      ? `<span class="injury-row__en">${escapeHtml(p.name)}</span>`
+                      : ''
+                  }
                   <span class="injury-row__detail">${escapeHtml(INJURY_TYPE[p.type] || p.type || '伤势')}${
                     p.side ? ` · ${p.side === 'Left' ? '左' : p.side === 'Right' ? '右' : p.side}` : ''
                   }${p.returnDate ? ` · 预计 ${p.returnDate.slice(5)} 回归` : ''}</span>
@@ -708,7 +1220,7 @@ export function renderWatchSheet(game) {
         <span class="legal-note__icon">${icon('info')}</span>
         <div>
           <strong>场边不提供任何非官方直播源。</strong>
-          <p>我们只聚合官方与持权平台的入口，避免盗链、恶意广告和账号风险。NBA 的转播版权按地区划分，部分场次可能出现黑屏或不可用，属于正常现象。</p>
+          <p>我们只聚合官方与持权平台的入口，不收录第三方聚合站、盗链站或“免费直播”页面，避免恶意广告和账号风险。NBA 的转播版权按地区划分，部分场次可能出现黑屏或不可用，属于正常现象。</p>
         </div>
       </div>
     </div>
