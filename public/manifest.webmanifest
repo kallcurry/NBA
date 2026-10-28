@@ -1,0 +1,55 @@
+{
+  "name": "场边 COURTSIDE · NBA",
+  "short_name": "场边",
+  "description": "每天为你整理 NBA 赛程、实时比分、比赛数据与官方观赛入口。",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "start_url": "/#/today",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
+  "background_color": "#090a0c",
+  "theme_color": "#090a0c",
+  "categories": ["sports", "news"],
+  "icons": [
+    {
+      "src": "/assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "今日比赛",
+      "short_name": "今日",
+      "url": "/#/today",
+      "icons": [{ "src": "/assets/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "赛程",
+      "short_name": "赛程",
+      "url": "/#/schedule",
+      "icons": [{ "src": "/assets/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "球队与排名",
+      "short_name": "球队",
+      "url": "/#/teams",
+      "icons": [{ "src": "/assets/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
