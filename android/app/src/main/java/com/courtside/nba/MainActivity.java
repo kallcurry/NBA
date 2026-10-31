@@ -70,7 +70,7 @@ public class MainActivity extends Activity {
         settings.setDisplayZoomControls(false);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
-        settings.setUserAgentString(settings.getUserAgentString() + " CourtsideAndroid/1.1.2");
+        settings.setUserAgentString(settings.getUserAgentString() + " CourtsideAndroid/1.1.3");
 
         webView.addJavascriptInterface(new NativeBridge(), "CourtsideNative");
         webView.setWebViewClient(new LocalWebViewClient());
@@ -245,7 +245,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public String appVersion() {
-            return "1.1.2";
+            return "1.1.3";
         }
 
         @JavascriptInterface

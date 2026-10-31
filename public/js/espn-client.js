@@ -600,3 +600,74 @@ export async function getCalendar() {
     fetchedAt: new Date().toISOString(),
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Full season schedule                                               */
+/* ------------------------------------------------------------------ */
+function phaseForGame(game) {
+  const type = String(game.seasonType || '').toLowerCase();
+  if (type.includes('post')) return 'playoffs';
+  if (type.includes('pre')) return 'preseason';
+  if (type.includes('reg')) return 'regular';
+  if (type.includes('all-star') || type.includes('allstar')) return 'allstar';
+  return 'other';
+}
+
+function phaseLabelFor(game, phase) {
+  const note = String(game.note || '').toLowerCase();
+  if (phase === 'preseason') return '季前赛';
+  if (phase === 'playoffs') {
+    if (note.includes('play-in') || note.includes('play in')) return '附加赛';
+    if (note.includes('finals')) return '总决赛';
+    if (note.includes('conference finals')) return '分区决赛';
+    if (note.includes('semifinals')) return '半决赛';
+    if (note.includes('first round')) return '季后赛首轮';
+    return '季后赛';
+  }
+  if (phase === 'allstar') return '全明星';
+  if (phase === 'regular') return '常规赛';
+  return '其他';
+}
+
+async function getTeamSeasonEvents(teamId) {
+  const data = await fetchJSON(`${ESPN}/teams/${teamId}/schedule?season=${SEASON}`);
+  return (data.events || []).map(normalizeEvent).filter(Boolean);
+}
+
+export async function getSeasonSchedule() {
+  const teamData = await getTeams();
+  const queue = [...(teamData.teams || [])];
+  const collected = new Map();
+  const workers = Array.from({ length: 4 }, async () => {
+    while (queue.length) {
+      const team = queue.shift();
+      if (!team) break;
+      try {
+        for (const game of await getTeamSeasonEvents(team.id)) {
+          if (!collected.has(game.id)) collected.set(game.id, game);
+        }
+      } catch {
+        // One team failing should not erase the rest of the season.
+      }
+    }
+  });
+  await Promise.all(workers);
+  const games = [...collected.values()]
+    .map((game) => {
+      const phase = phaseForGame(game);
+      return { ...game, phase, phaseLabel: phaseLabelFor(game, phase) };
+    })
+    .sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+  const phases = {};
+  for (const game of games) phases[game.phase] = (phases[game.phase] || 0) + 1;
+  return {
+    season: `${Number(SEASON) - 1}-${String(Number(SEASON)).slice(-2)}`,
+    games,
+    count: games.length,
+    phases,
+    firstGame: games[0]?.startTime || null,
+    lastGame: games.at(-1)?.startTime || null,
+    source: 'ESPN',
+    fetchedAt: new Date().toISOString(),
+  };
+}

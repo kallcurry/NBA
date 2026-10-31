@@ -13,7 +13,7 @@ JAVAC="$JAVA_HOME/bin/javac"
 KEYTOOL="$JAVA_HOME/bin/keytool"
 BUILD="$ROOT/build/manual"
 DIST="$ROOT/dist"
-VERSION="1.1.2"
+VERSION="1.1.3"
 
 if [[ ! -x "$BUILD_TOOLS/aapt2" ]]; then
   echo "aapt2 not found under $BUILD_TOOLS" >&2
@@ -44,7 +44,7 @@ echo "[2/6] Linking APK resources and assets"
   --auto-add-overlay \
   --min-sdk-version 26 \
   --target-sdk-version 35 \
-  --version-code 3 \
+  --version-code 4 \
   --version-name "$VERSION"
 
 echo "[3/6] Compiling Java"

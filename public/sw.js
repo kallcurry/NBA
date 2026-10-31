@@ -17,6 +17,7 @@ const SHELL = [
   '/js/components/game-detail.js',
   '/js/views/today.js',
   '/js/views/schedule.js',
+  '/js/views/season.js',
   '/js/views/teams.js',
   '/js/views/guide.js',
   '/js/views/settings.js',

@@ -124,6 +124,7 @@ export function renderSchedule({
         <p class="page-sub">2026-27 常规赛 · 所有时间均为北京时间 · 点选日期查看当天比赛</p>
       </div>
       <div class="page-head__aside">
+        <a class="month-jump" href="#/season">${icon('trophy')}完整赛季</a>
         <a class="month-jump" href="#/schedule/${monthShift(-1)}">${icon('chevron-left')}上月</a>
         <a class="month-jump" href="#/schedule/${monthShift(1)}">下月${icon('chevron-right')}</a>
       </div>

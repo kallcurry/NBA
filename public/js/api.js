@@ -181,6 +181,18 @@ export function getCalendar() {
   );
 }
 
+export function getSeasonSchedule({ force = false } = {}) {
+  return memo(
+    'season-schedule',
+    60 * 60 * 1000,
+    () =>
+      STANDALONE
+        ? espn.getSeasonSchedule()
+        : request('/api/season-schedule', { timeout: 120000 }),
+    force,
+  );
+}
+
 export { STANDALONE };
 
 export function seedMemoryDay(day) {

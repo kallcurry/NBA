@@ -1,15 +1,16 @@
 # 场边 NBA · Android APK
 
-- 最新文件：`courtside-1.1.2.apk`
-- 版本：1.1.2（versionCode 3）
+- 最新文件：`courtside-1.1.3.apk`
+- 版本：1.1.3（versionCode 4）
 - 包名：`com.courtside.nba`
 - 最低系统：Android 8.0 / API 26
 - 大小：约 379 KB
 - 签名：debug keystore（个人安装包，不适合直接上架应用商店）
 
-## 1.1.2 修复
+## 1.1.3 更新
 
-- **只有未开赛的比赛显示铃铛**；已经开赛/结束的比赛不会再“假装设置成功”。
+- 新增「赛季」页：完整 2026-27 常规赛赛程，阶段/月份/球队筛选。
+- 只有未开赛的比赛显示铃铛；已开赛/结束的比赛会拒绝设置提醒。
 - 修复 Android 15 / 全面屏手机顶栏与状态栏重叠。
 - 处理底部手势条遮挡。
 
@@ -18,7 +19,7 @@
 手机允许“安装未知来源应用”后直接打开 APK，或：
 
 ```bash
-adb install -r courtside-1.1.2.apk
+adb install -r courtside-1.1.3.apk
 ```
 
 已安装旧版本可以直接覆盖安装，数据会保留。

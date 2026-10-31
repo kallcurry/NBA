@@ -4,7 +4,8 @@
  * Zero-dependency static server + caching proxy for ESPN's public NBA API.
  */
 import http from 'node:http';
-import { readFile, stat } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,6 +17,9 @@ const ESPN = 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba';
 const ESPN_V2 = 'https://site.api.espn.com/apis/v2/sports/basketball/nba';
 const SEASON = process.env.NBA_SEASON || '2027';
 const TZ = 'Asia/Shanghai';
+const DATA_DIR = path.join(__dirname, 'data');
+const PREFS_FILE = path.join(DATA_DIR, 'preferences.json');
+const NOTIFY_ICON = path.join(PUBLIC_DIR, 'assets/icon-192.png');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -107,6 +111,15 @@ function compact(dateStr) {
 
 function todayBeijing() {
   return beijingDate(new Date().toISOString());
+}
+
+function formatBeijingTime(iso) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(iso));
 }
 
 /* ------------------------------------------------------------------ */
@@ -501,6 +514,91 @@ async function getGame(id) {
   });
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Full season schedule                                               */
+/* ------------------------------------------------------------------ */
+function phaseForGame(game) {
+  const type = String(game.seasonType || '').toLowerCase();
+  if (type.includes('post')) return 'playoffs';
+  if (type.includes('pre')) return 'preseason';
+  if (type.includes('reg')) return 'regular';
+  if (type.includes('all-star') || type.includes('allstar')) return 'allstar';
+  return 'other';
+}
+
+function phaseLabelFor(game, phase) {
+  const note = String(game.note || '').toLowerCase();
+  if (phase === 'preseason') return '季前赛';
+  if (phase === 'playoffs') {
+    if (note.includes('play-in') || note.includes('play in')) return '附加赛';
+    if (note.includes('finals')) return '总决赛';
+    if (note.includes('conference finals')) return '分区决赛';
+    if (note.includes('semifinals')) return '半决赛';
+    if (note.includes('first round')) return '季后赛首轮';
+    return '季后赛';
+  }
+  if (phase === 'allstar') return '全明星';
+  if (phase === 'regular') return '常规赛';
+  return '其他';
+}
+
+async function getTeamSeasonEvents(teamId) {
+  return cached(`team-season:${teamId}`, 60 * 60 * 1000, async () => {
+    const data = await getJSON(`${ESPN}/teams/${teamId}/schedule?season=${SEASON}`);
+    return (data.events || []).map(normalizeEvent).filter(Boolean);
+  });
+}
+
+async function getSeasonSchedule() {
+  return cached('season-schedule', 60 * 60 * 1000, async () => {
+    const teamData = await getTeams();
+    const teams = teamData.teams || [];
+    const queue = [...teams];
+    const collected = new Map();
+    const workers = Array.from({ length: 6 }, async () => {
+      while (queue.length) {
+        const team = queue.shift();
+        if (!team) break;
+        try {
+          const games = await getTeamSeasonEvents(team.id);
+          for (const game of games) {
+            if (!collected.has(game.id)) collected.set(game.id, game);
+          }
+        } catch (err) {
+          console.warn(`[season] ${team.abbr} schedule failed: ${err.message}`);
+        }
+      }
+    });
+    await Promise.all(workers);
+
+    const games = [...collected.values()]
+      .map((game) => {
+        const phase = phaseForGame(game);
+        return {
+          ...game,
+          phase,
+          phaseLabel: phaseLabelFor(game, phase),
+        };
+      })
+      .sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+    if (!games.length) throw new Error('赛季赛程暂时不可用');
+
+    const phases = {};
+    for (const game of games) phases[game.phase] = (phases[game.phase] || 0) + 1;
+    return {
+      season: `${Number(SEASON) - 1}-${String(Number(SEASON)).slice(-2)}`,
+      games,
+      count: games.length,
+      phases,
+      firstGame: games[0]?.startTime || null,
+      lastGame: games.at(-1)?.startTime || null,
+      source: 'ESPN',
+      fetchedAt: new Date().toISOString(),
+    };
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /* teams, standings, schedule, news, calendar                          */
 /* ------------------------------------------------------------------ */
@@ -703,9 +801,237 @@ function apiError(res, err) {
   });
 }
 
+/* ------------------------------------------------------------------ */
+/* PC system notifications                                             */
+/* ------------------------------------------------------------------ */
+const DEFAULT_SETTINGS = {
+  lead: 15,
+  start: true,
+  final: true,
+  close: false,
+  serverNotifications: false,
+};
+
+function defaultPreferences() {
+  return {
+    favorites: [],
+    reminders: {},
+    settings: { ...DEFAULT_SETTINGS },
+    sent: {},
+  };
+}
+
+let serverPrefs = defaultPreferences();
+let prefsReady = null;
+
+async function loadPreferences() {
+  try {
+    const raw = await readFile(PREFS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    serverPrefs = sanitizePreferences(parsed, parsed.sent || {});
+  } catch {
+    serverPrefs = defaultPreferences();
+  }
+  return serverPrefs;
+}
+
+async function savePreferences() {
+  try {
+    await mkdir(DATA_DIR, { recursive: true });
+    await writeFile(PREFS_FILE, JSON.stringify(serverPrefs, null, 2), 'utf8');
+    return true;
+  } catch (err) {
+    console.warn('[notify] could not save preferences:', err.message);
+    return false;
+  }
+}
+
+function sanitizePreferences(input = {}, sent = {}) {
+  const favorites = Array.isArray(input.favorites)
+    ? [...new Set(input.favorites.filter((v) => typeof v === 'string' && /^[A-Z0-9]{2,5}$/.test(v)))].slice(0, 30)
+    : [];
+  const reminders = {};
+  if (input.reminders && typeof input.reminders === 'object') {
+    for (const [key, value] of Object.entries(input.reminders).slice(0, 300)) {
+      if (/^\d{4,12}$/.test(String(key))) reminders[String(key)] = value || {};
+    }
+  }
+  const settings = {
+    lead: Math.max(5, Math.min(120, Number(input.settings?.lead) || DEFAULT_SETTINGS.lead)),
+    start: input.settings?.start !== false,
+    final: input.settings?.final !== false,
+    close: Boolean(input.settings?.close),
+    serverNotifications: Boolean(input.settings?.serverNotifications),
+  };
+  return { favorites, reminders, settings, sent: sent && typeof sent === 'object' ? sent : {} };
+}
+
+function readBody(req, limit = 64 * 1024) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk;
+      if (body.length > limit) {
+        reject(new Error('请求内容过大'));
+        req.destroy();
+      }
+    });
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
+  });
+}
+
+function systemNotificationSupport() {
+  if (process.platform === 'linux') return { available: true, platform: 'linux', via: 'notify-send' };
+  if (process.platform === 'darwin') return { available: true, platform: 'darwin', via: 'osascript' };
+  if (process.platform === 'win32') return { available: true, platform: 'win32', via: 'PowerShell toast' };
+  return { available: false, platform: process.platform, via: '' };
+}
+
+function sendSystemNotification(title, body) {
+  const support = systemNotificationSupport();
+  if (!support.available) return Promise.resolve(false);
+
+  if (support.platform === 'linux') {
+    return new Promise((resolve) => {
+      execFile(
+        'notify-send',
+        ['--app-name=场边 COURTSIDE', `--icon=${NOTIFY_ICON}`, '--urgency=normal', title, body],
+        { timeout: 5000 },
+        (error) => {
+          if (error) console.warn('[notify] notify-send failed:', error.message);
+          resolve(!error);
+        },
+      );
+    });
+  }
+
+  if (support.platform === 'darwin') {
+    const quote = (value) => JSON.stringify(String(value));
+    const script = `display notification ${quote(body)} with title ${quote(title)} sound name "Glass"`;
+    return new Promise((resolve) => {
+      execFile('osascript', ['-e', script], { timeout: 5000 }, (error) => resolve(!error));
+    });
+  }
+
+  const script = [
+    'Add-Type -AssemblyName System.Windows.Forms',
+    'Add-Type -AssemblyName System.Drawing',
+    '$n = New-Object System.Windows.Forms.NotifyIcon',
+    '$n.Icon = [System.Drawing.SystemIcons]::Information',
+    '$n.Visible = $true',
+    '$n.ShowBalloonTip(10000, $env:COURTSIDE_TITLE, $env:COURTSIDE_BODY, [System.Windows.Forms.ToolTipIcon]::Info)',
+    'Start-Sleep -Seconds 3',
+    '$n.Dispose()',
+  ].join('; ');
+  return new Promise((resolve) => {
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      {
+        timeout: 8000,
+        env: { ...process.env, COURTSIDE_TITLE: String(title), COURTSIDE_BODY: String(body) },
+      },
+      (error) => resolve(!error),
+    );
+  });
+}
+
+const notificationPoll = { busy: false, timer: null };
+
+function involvesFavorite(game) {
+  return serverPrefs.favorites.includes(game.away.abbr) || serverPrefs.favorites.includes(game.home.abbr);
+}
+
+async function notifyOnce(key, title, body) {
+  if (serverPrefs.sent[key]) return false;
+  const ok = await sendSystemNotification(title, body);
+  if (ok) {
+    serverPrefs.sent[key] = Date.now();
+    // Keep the state file small.
+    const cutoff = Date.now() - 4 * 24 * 60 * 60 * 1000;
+    for (const [sentKey, timestamp] of Object.entries(serverPrefs.sent)) {
+      if (timestamp < cutoff) delete serverPrefs.sent[sentKey];
+    }
+    await savePreferences();
+  }
+  return ok;
+}
+
+async function pollSystemNotifications() {
+  if (notificationPoll.busy || !serverPrefs.settings.serverNotifications) return;
+  if (!serverPrefs.favorites.length && !Object.keys(serverPrefs.reminders).length) return;
+  notificationPoll.busy = true;
+  try {
+    const day = await getDay(todayBeijing());
+    const now = Date.now();
+    for (const game of day.games) {
+      const explicit = Boolean(serverPrefs.reminders[game.id]);
+      const favorite = involvesFavorite(game);
+      if (!explicit && !favorite) continue;
+      const start = new Date(game.startTime).getTime();
+
+      if (serverPrefs.settings.start && game.status.state === 'pre') {
+        const minutesToStart = (start - now) / 60000;
+        if (minutesToStart <= serverPrefs.settings.lead && minutesToStart > -10) {
+          await notifyOnce(
+            `start:${game.id}`,
+            '比赛即将开始',
+            `${game.away.abbr} vs ${game.home.abbr} · ${formatBeijingTime(game.startTime)} · 北京时间`,
+          );
+        }
+      }
+
+      if (
+        serverPrefs.settings.final &&
+        favorite &&
+        game.status.state === 'post' &&
+        now - start < 8 * 3600 * 1000
+      ) {
+        const winner = game.home.score > game.away.score ? game.home : game.away;
+        await notifyOnce(
+          `final:${game.id}`,
+          '比赛结束',
+          `${game.away.abbr} ${game.away.score} - ${game.home.score} ${game.home.abbr} · ${winner.abbr} 获胜`,
+        );
+      }
+
+      if (
+        serverPrefs.settings.close &&
+        favorite &&
+        game.status.state === 'in' &&
+        game.status.period >= 4 &&
+        Math.abs(game.home.score - game.away.score) <= 5
+      ) {
+        await notifyOnce(
+          `close:${game.id}`,
+          '关键回合 · 分差 5 分以内',
+          `${game.away.abbr} ${game.away.score} - ${game.home.score} ${game.home.abbr} · ${
+            game.status.period > 4 ? '加时' : `第 ${game.status.period} 节`
+          }`,
+        );
+      }
+    }
+  } catch (err) {
+    console.warn('[notify] poll failed:', err.message);
+  } finally {
+    notificationPoll.busy = false;
+  }
+}
+
+function startNotificationPolling() {
+  if (notificationPoll.timer) clearInterval(notificationPoll.timer);
+  notificationPoll.timer = setInterval(pollSystemNotifications, 45000);
+  notificationPoll.timer.unref?.();
+  // Give the server and the first preference sync a moment.
+  setTimeout(pollSystemNotifications, 4000).unref?.();
+}
+
+
 async function handleApi(req, res, url) {
   const { pathname, searchParams } = url;
   try {
+    await prefsReady;
     if (pathname === '/api/health') {
       return sendJSON(res, 200, { ok: true, time: new Date().toISOString(), season: SEASON });
     }
@@ -731,6 +1057,52 @@ async function handleApi(req, res, url) {
     }
     if (pathname === '/api/news') return sendJSON(res, 200, await getNews());
     if (pathname === '/api/calendar') return sendJSON(res, 200, await getCalendar());
+    if (pathname === '/api/season-schedule') return sendJSON(res, 200, await getSeasonSchedule());
+
+    if (pathname === '/api/notification-status') {
+      return sendJSON(res, 200, {
+        ...systemNotificationSupport(),
+        enabled: serverPrefs.settings.serverNotifications,
+      });
+    }
+
+    if (pathname === '/api/preferences') {
+      if (req.method === 'PUT') {
+        const raw = await readBody(req);
+        let parsed;
+        try {
+          parsed = JSON.parse(raw || '{}');
+        } catch {
+          return sendJSON(res, 400, { error: true, message: '偏好设置格式错误' });
+        }
+        serverPrefs = sanitizePreferences(parsed, serverPrefs.sent);
+        await savePreferences();
+        if (serverPrefs.settings.serverNotifications) setTimeout(pollSystemNotifications, 800).unref?.();
+        return sendJSON(res, 200, {
+          ok: true,
+          favorites: serverPrefs.favorites,
+          settings: serverPrefs.settings,
+        });
+      }
+      return sendJSON(res, 200, {
+        favorites: serverPrefs.favorites,
+        reminders: serverPrefs.reminders,
+        settings: serverPrefs.settings,
+      });
+    }
+
+    if (pathname === '/api/test-notification') {
+      if (req.method !== 'POST') return sendJSON(res, 405, { error: true, message: '请使用 POST' });
+      const ok = await sendSystemNotification(
+        '场边 · 系统通知测试',
+        '如果你看到这条桌面通知，说明电脑系统提示已经工作。',
+      );
+      return sendJSON(res, 200, { ok, ...systemNotificationSupport() });
+    }
+
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      return sendJSON(res, 405, { error: true, message: '接口不支持这个请求方法' });
+    }
     return sendJSON(res, 404, { error: true, message: '接口不存在' });
   } catch (err) {
     return apiError(res, err);
@@ -784,13 +1156,23 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(204, { 'access-control-allow-origin': '*' });
     return res.end();
   }
+  if (url.pathname.startsWith('/api/')) return handleApi(req, res, url);
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405);
     return res.end('Method not allowed');
   }
-  if (url.pathname.startsWith('/api/')) return handleApi(req, res, url);
   return serveStatic(req, res, url);
 });
+
+prefsReady = loadPreferences()
+  .then(() => {
+    startNotificationPolling();
+    return serverPrefs;
+  })
+  .catch((err) => {
+    console.warn('[notify] preferences initialization failed:', err.message);
+    return serverPrefs;
+  });
 
 server.listen(PORT, HOST, () => {
   console.log(`\n  COURTSIDE / 场边\n  http://${HOST}:${PORT}\n  season ${SEASON} · times in ${TZ}\n`);

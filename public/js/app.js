@@ -28,6 +28,7 @@ import { renderToday } from './views/today.js';
 import { renderSchedule } from './views/schedule.js';
 import { renderTeams, renderTeamSheet } from './views/teams.js';
 import { renderGuide } from './views/guide.js';
+import { renderSeason } from './views/season.js';
 import { renderSettings } from './views/settings.js';
 import {
   detailUi,
@@ -67,6 +68,13 @@ const app = {
   flashIds: new Set(),
 
   teams: [],
+  season: null,
+  seasonLoading: false,
+  seasonError: null,
+  seasonPromise: null,
+  seasonPhase: 'all',
+  seasonMonth: '',
+  seasonTeam: 'all',
   standings: null,
   standingsLoading: false,
   standingsError: null,
@@ -111,6 +119,7 @@ function parseRoute() {
   if (parts[0] === 'game' && parts[1]) return { name: 'game', id: parts[1] };
   if (parts[0] === 'schedule') return { name: 'schedule', date: validDate(parts[1]) ? parts[1] : todayStr() };
   if (parts[0] === 'teams') return { name: 'teams', date: todayStr() };
+  if (parts[0] === 'season') return { name: 'season', date: todayStr() };
   if (parts[0] === 'guide') return { name: 'guide', date: todayStr() };
   if (parts[0] === 'today') return { name: 'today', date: validDate(parts[1]) ? parts[1] : todayStr() };
   return { name: 'today', date: todayStr() };
@@ -119,6 +128,7 @@ function parseRoute() {
 function baseHashFor(base) {
   if (base.name === 'schedule') return `#/schedule/${base.date}`;
   if (base.name === 'teams') return '#/teams';
+  if (base.name === 'season') return '#/season';
   if (base.name === 'guide') return '#/guide';
   return `#/today/${base.date}`;
 }
@@ -189,6 +199,7 @@ function renderSidebar() {
   const navItems = [
     { id: 'today', href: `#/today/${todayStr()}`, icon: 'today', label: '今日比赛', meta: 'TODAY' },
     { id: 'schedule', href: `#/schedule/${todayStr()}`, icon: 'schedule', label: '赛程', meta: 'SCHEDULE' },
+    { id: 'season', href: '#/season', icon: 'trophy', label: '赛季', meta: 'SEASON' },
     { id: 'teams', href: '#/teams', icon: 'teams', label: '球队', meta: 'TEAMS' },
     { id: 'guide', href: '#/guide', icon: 'guide', label: '观赛指南', meta: 'WATCH' },
   ];
@@ -269,6 +280,9 @@ function renderTopbar() {
   } else if (base.name === 'teams') {
     crumb = '球队';
     crumbValue = '联盟排名';
+  } else if (base.name === 'season') {
+    crumb = '赛季';
+    crumbValue = '完整赛程';
   } else if (base.name === 'guide') {
     crumb = '观赛指南';
     crumbValue = '官方渠道';
@@ -298,6 +312,7 @@ function renderTabbar() {
   const items = [
     { id: 'today', href: `#/today/${todayStr()}`, icon: 'today', label: '今日' },
     { id: 'schedule', href: `#/schedule/${todayStr()}`, icon: 'schedule', label: '赛程' },
+    { id: 'season', href: '#/season', icon: 'trophy', label: '赛季' },
     { id: 'teams', href: '#/teams', icon: 'teams', label: '球队' },
     { id: 'guide', href: '#/guide', icon: 'guide', label: '指南' },
   ];
@@ -396,6 +411,7 @@ function pageTitleFor(base) {
   }
   if (base.name === 'schedule') return `NBA 赛程 · ${fmtDateLong(base.date)} · 场边`;
   if (base.name === 'teams') return '球队与排名 · 场边 COURTSIDE';
+  if (base.name === 'season') return '完整赛季赛程 · 场边 COURTSIDE';
   if (base.name === 'guide') return '观赛指南 · 场边 COURTSIDE';
   return '场边 COURTSIDE';
 }
@@ -438,6 +454,18 @@ function renderCurrent({ keepScroll = true } = {}) {
       activeConference: app.activeConference,
       loading: app.standingsLoading,
       error: app.standingsError,
+    });
+  } else if (base.name === 'season') {
+    html = renderSeason({
+      season: app.season,
+      loading: app.seasonLoading,
+      error: app.seasonError,
+      phase: app.seasonPhase,
+      month: app.seasonMonth,
+      team: app.seasonTeam,
+      teams: app.teams,
+      favorites: store.favorites,
+      reminders: store.reminders,
     });
   } else if (base.name === 'guide') {
     html = renderGuide({ day: app.day?.date === todayStr() ? app.day : null });
@@ -559,6 +587,28 @@ async function ensureStandings({ force = false } = {}) {
   }
 }
 
+async function ensureSeason({ force = false } = {}) {
+  if (app.season && !force) return app.season;
+  if (app.seasonPromise && !force) return app.seasonPromise;
+  app.seasonLoading = true;
+  app.seasonError = null;
+  const promise = (async () => {
+    try {
+      app.season = await api.getSeasonSchedule({ force });
+      app.lastUpdated = Date.now();
+      return app.season;
+    } catch (err) {
+      app.seasonError = err?.message || '赛季赛程加载失败';
+      return null;
+    } finally {
+      app.seasonLoading = false;
+      app.seasonPromise = null;
+    }
+  })();
+  app.seasonPromise = promise;
+  return promise;
+}
+
 async function refreshDay({ manual = false } = {}) {
   const base = app.currentBase;
   if (!base || !['today', 'schedule'].includes(base.name)) return;
@@ -597,7 +647,7 @@ function ensureAux() {
       .then((data) => {
         app.teams = data.teams || [];
         renderShell();
-        if (app.currentBase?.name === 'today') renderCurrent();
+        if (['today', 'season'].includes(app.currentBase?.name)) renderCurrent();
       })
       .catch(() => {
         app.aux.teams = 0;
@@ -1171,6 +1221,11 @@ function refreshAction() {
       renderCurrent();
       toast('排名已更新');
     });
+  } else if (base.name === 'season') {
+    ensureSeason({ force: true }).then(() => {
+      renderCurrent();
+      toast(app.season ? '赛季赛程已更新' : '赛季赛程加载失败', { type: app.season ? 'success' : 'error' });
+    });
   } else {
     toast('已经是最新内容');
   }
@@ -1309,6 +1364,17 @@ document.addEventListener('click', async (event) => {
       app.activeConference = target.dataset.conf;
       renderCurrent();
       break;
+    case 'season-phase':
+      event.preventDefault();
+      app.seasonPhase = target.dataset.phase || 'all';
+      app.seasonMonth = '';
+      renderCurrent();
+      break;
+    case 'season-month':
+      event.preventDefault();
+      app.seasonMonth = target.dataset.month || '';
+      renderCurrent();
+      break;
     case 'scroll-teams':
       event.preventDefault();
       $('#all-teams')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1321,6 +1387,13 @@ document.addEventListener('click', async (event) => {
       event.preventDefault();
       refreshAction();
       break;
+    case 'retry-season': {
+      event.preventDefault();
+      app.seasonError = null;
+      await ensureSeason({ force: true });
+      renderCurrent();
+      break;
+    }
     case 'retry-data': {
       event.preventDefault();
       const base = app.currentBase;
@@ -1345,10 +1418,18 @@ document.addEventListener('click', async (event) => {
 });
 
 document.addEventListener('change', (event) => {
-  const el = event.target.closest('[data-action="set-lead"]');
-  if (!el) return;
-  store.updateSettings({ lead: Number(el.value) });
-  refreshSettings();
+  const lead = event.target.closest('[data-action="set-lead"]');
+  if (lead) {
+    store.updateSettings({ lead: Number(lead.value) });
+    refreshSettings();
+    return;
+  }
+  const team = event.target.closest('[data-action="season-team"]');
+  if (team) {
+    app.seasonTeam = team.value || 'all';
+    app.seasonMonth = '';
+    renderCurrent();
+  }
 });
 
 document.addEventListener('keydown', (event) => {
@@ -1397,6 +1478,15 @@ async function hydrateBase(base, seq) {
   }
   if (base.name === 'teams') {
     const promise = ensureStandings();
+    renderCurrent();
+    await promise;
+    if (seq !== app.routeSeq) return;
+    renderCurrent();
+    ensureAux();
+    return;
+  }
+  if (base.name === 'season') {
+    const promise = ensureSeason();
     renderCurrent();
     await promise;
     if (seq !== app.routeSeq) return;

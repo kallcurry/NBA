@@ -2,7 +2,7 @@
 
 > 每天，准时坐到场边。一个为 NBA 球迷做的每日比赛台：赛程、实时比分、比赛数据、开赛提醒，以及官方观赛入口。
 
-> **安卓安装包（v1.1.2）**：[Courtside-1.1.2.apk](Courtside-1.1.2.apk) · [release 目录](release/)
+> **安卓安装包（v1.1.2）**：[Courtside-1.1.3.apk](Courtside-1.1.3.apk) · [release 目录](release/)
 
 ![场边 COURTSIDE 桌面端](docs/preview-desktop.jpg)
 
@@ -23,6 +23,13 @@
 - 正在直播、即将开赛、已结束分组展示。
 - 直播比分每 20 秒自动刷新，比分变化有轻微高亮。
 - 今日焦点自动选择最胶着/最值得看的比赛。
+
+### 赛季中心
+- 聚合 30 支球队的赛程，去重后展示完整 **2026-27 常规赛**（1200 场）。
+- 阶段筛选：全部 / 常规赛 / 季前赛 / 季后赛；季后赛未开打时显示明确空状态。
+- 月份导航：10 月到次年 4 月，每月场次数量一目了然。
+- 球队筛选、完整比赛列表、直接进入比赛详情。
+- 季后赛入口已预留，等 2027 年 4 月季后赛开打后自动展示对应赛程。
 
 ### 比赛分析（默认打开）
 - **KPI 卡片**：当前分差、最大领先、投篮命中率、三分命中、篮板/助攻，一屏看懂。
@@ -61,9 +68,9 @@
 
 ## 截图
 
-| 比赛详情 | 手机端 |
-| --- | --- |
-| ![比赛详情](docs/preview-detail.jpg) | ![手机端](docs/preview-mobile.jpg) |
+| 赛季中心 | 比赛详情 | 手机端 |
+| --- | --- | --- |
+| ![赛季中心](docs/preview-season.jpg) | ![比赛详情](docs/preview-detail.jpg) | ![手机端](docs/preview-mobile.jpg) |
 
 ## 快速开始
 
@@ -148,7 +155,7 @@ NBA 官方比赛日按美国东部时间划分，而中国球迷说的“今天�
 │       ├── espn-client.js     # APK 独立模式：直连 ESPN
 │       ├── calendar.js        # .ics 导出
 │       ├── components/        # 比赛卡片、比赛详情
-│       └── views/             # 今日、赛程、球队、指南、设置
+│       └── views/             # 今日、赛程、赛季、球队、指南、设置
 └── docs/                      # README 截图
 ```
 
@@ -167,6 +174,7 @@ NBA 官方比赛日按美国东部时间划分，而中国球迷说的“今天�
 | `GET /api/team-schedule?team=ID` | 球队近期与未来赛程 |
 | `GET /api/news` | ESPN NBA 新闻 |
 | `GET /api/calendar` | 赛季比赛日（用于日历圆点） |
+| `GET /api/season-schedule` | 聚合后的完整赛季赛程 |
 
 数据来源：
 
@@ -227,6 +235,18 @@ echo "$GITHUB_TOKEN" | docker login ghcr.io -u kallcurry --password-stdin
 
 > 部署到 HTTPS 域名后，网页通知和 PWA 安装才能完整工作。`localhost` 也被视为安全上下文。
 
+### 赛季赛程的数据来源
+
+公开 API 没有“一次返回整个赛季”的干净端点，所以服务端会并行拉取 30 支球队的 `schedule`，按比赛 ID 去重，补上阶段标签，再缓存 1 小时。第一次打开赛季页会慢一些，之后是内存缓存。
+
+```text
+30 × /teams/{id}/schedule?season=2027
+        ↓ 去重 / 排序 / 阶段标记
+/api/season-schedule
+        ↓
+赛季中心（月份 + 阶段 + 球队筛选）
+```
+
 ### Android APK
 
 `android/` 是一个独立的 WebView 壳，打包了 `public/`，所以不需要在手机上跑 Node 服务。它使用 `site.web.api.espn.com` 直连数据，并通过原生桥接实现关掉 App 后的开赛提醒。
@@ -240,7 +260,7 @@ export ANDROID_HOME=/path/to/android-sdk
 产物：
 
 ```text
-android/dist/courtside-1.1.2.apk
+android/dist/courtside-1.1.3.apk
 ```
 
 1.1.1 修复了 Android 15 / 全面屏手机上顶栏与状态栏重叠的问题，并处理了底部手势条遮挡。
@@ -248,7 +268,7 @@ android/dist/courtside-1.1.2.apk
 安装：
 
 ```bash
-adb install -r android/dist/courtside-1.1.2.apk
+adb install -r android/dist/courtside-1.1.3.apk
 ```
 
 说明：

@@ -6,7 +6,7 @@ export function icon(name, className = '') {
   return `<svg class="icon ${className}" aria-hidden="true"><use href="#i-${name}"></use></svg>`;
 }
 
-export function logo(team, size = 'md', extraClass = '') {
+export function logo(team, size = 'md', extraClass = '', eager = false) {
   if (!team?.logo) {
     return `<span class="team-logo team-logo--${size} team-logo--fallback ${extraClass}" aria-hidden="true">${escapeHtml(
       team?.abbr?.slice(0, 3) || 'NBA',
@@ -14,7 +14,7 @@ export function logo(team, size = 'md', extraClass = '') {
   }
   return `<span class="team-logo-wrap team-logo-wrap--${size} ${extraClass}"><img class="team-logo team-logo--${size}" src="${escapeHtml(
     darkLogo(team.logo),
-  )}" alt="${escapeHtml(cnName(team))}队标" loading="lazy" decoding="async" /></span>`;
+  )}" alt="${escapeHtml(cnName(team))}队标" loading="${eager ? 'eager' : 'lazy'}" decoding="async" /></span>`;
 }
 
 export function teamInline(team, { size = 'sm', showRecord = false, class: extra = '' } = {}) {
