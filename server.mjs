@@ -574,7 +574,7 @@ async function getSeasonSchedule() {
     const teams = teamData.teams || [];
     const queue = [...teams];
     const collected = new Map();
-    const workers = Array.from({ length: 6 }, async () => {
+    const workers = Array.from({ length: 10 }, async () => {
       while (queue.length) {
         const team = queue.shift();
         if (!team) break;
@@ -622,6 +622,122 @@ async function getSeasonSchedule() {
     }
     return result;
   });
+}
+
+
+async function streamSeasonSchedule(res) {
+  res.writeHead(200, {
+    'content-type': 'application/x-ndjson; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-accel-buffering': 'no',
+  });
+  res.flushHeaders?.();
+  const write = (payload) => {
+    if (res.writableEnded || res.destroyed) return false;
+    res.write(`${JSON.stringify(payload)}\n`);
+    return true;
+  };
+
+  try {
+    // Fast path: an in-memory or disk cache means the client gets the whole
+    // season in one immediate frame.
+    const mem = cache.get('season-schedule');
+    if (mem && mem.expires > Date.now()) {
+      write({ type: 'batch', games: mem.value.games });
+      write({ type: 'done', data: mem.value });
+      return res.end();
+    }
+    try {
+      const disk = JSON.parse(await readFile(SEASON_CACHE_FILE, 'utf8'));
+      if (
+        disk?.savedAt &&
+        Date.now() - disk.savedAt < SEASON_CACHE_TTL &&
+        Array.isArray(disk.data?.games) &&
+        disk.data.games.length
+      ) {
+        write({ type: 'batch', games: disk.data.games });
+        write({ type: 'done', data: disk.data });
+        return res.end();
+      }
+    } catch {
+      /* build it */
+    }
+
+    // Show today's games immediately while the 30-team season aggregation
+    // continues in the background.
+    try {
+      const day = await getDay(todayBeijing());
+      const preview = (day.games || []).map((game) => {
+        const phase = phaseForGame(game);
+        return { ...game, phase, phaseLabel: phaseLabelFor(game, phase) };
+      });
+      if (preview.length) write({ type: 'batch', games: preview, preview: true, loaded: preview.length });
+    } catch {
+      /* preview is optional */
+    }
+
+    const teamData = await getTeams();
+    const teams = teamData.teams || [];
+    write({ type: 'meta', season: `${Number(SEASON) - 1}-${String(Number(SEASON)).slice(-2)}`, teams: teams.length });
+    const queue = [...teams];
+    const collected = new Map();
+    let sent = 0;
+
+    const workers = Array.from({ length: 10 }, async () => {
+      while (queue.length) {
+        const team = queue.shift();
+        if (!team) break;
+        try {
+          const games = await getTeamSeasonEvents(team.id);
+          const fresh = [];
+          for (const game of games) {
+            if (collected.has(game.id)) continue;
+            const phase = phaseForGame(game);
+            const normalized = { ...game, phase, phaseLabel: phaseLabelFor(game, phase) };
+            collected.set(game.id, normalized);
+            fresh.push(normalized);
+          }
+          if (fresh.length) {
+            sent += fresh.length;
+            write({ type: 'batch', games: fresh, loaded: sent, totalTeams: teams.length });
+          }
+        } catch (err) {
+          console.warn(`[season-stream] ${team.abbr} schedule failed: ${err.message}`);
+        }
+      }
+    });
+    await Promise.all(workers);
+
+    const games = [...collected.values()].sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+    if (!games.length) {
+      write({ type: 'error', message: '赛季赛程暂时不可用' });
+      return res.end();
+    }
+    const phases = {};
+    for (const game of games) phases[game.phase] = (phases[game.phase] || 0) + 1;
+    const result = {
+      season: `${Number(SEASON) - 1}-${String(Number(SEASON)).slice(-2)}`,
+      games,
+      count: games.length,
+      phases,
+      firstGame: games[0]?.startTime || null,
+      lastGame: games.at(-1)?.startTime || null,
+      source: 'ESPN',
+      fetchedAt: new Date().toISOString(),
+    };
+    try {
+      await mkdir(DATA_DIR, { recursive: true });
+      await writeFile(SEASON_CACHE_FILE, JSON.stringify({ savedAt: Date.now(), data: result }), 'utf8');
+    } catch (err) {
+      console.warn('[season-stream] could not save disk cache:', err.message);
+    }
+    cache.set('season-schedule', { value: result, expires: Date.now() + SEASON_CACHE_TTL });
+    write({ type: 'done', data: result });
+    res.end();
+  } catch (err) {
+    write({ type: 'error', message: err.message || '赛季赛程加载失败' });
+    res.end();
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1083,6 +1199,7 @@ async function handleApi(req, res, url) {
     if (pathname === '/api/news') return sendJSON(res, 200, await getNews());
     if (pathname === '/api/calendar') return sendJSON(res, 200, await getCalendar());
     if (pathname === '/api/season-schedule') return sendJSON(res, 200, await getSeasonSchedule());
+    if (pathname === '/api/season-stream') return streamSeasonSchedule(res);
 
     if (pathname === '/api/notification-status') {
       return sendJSON(res, 200, {

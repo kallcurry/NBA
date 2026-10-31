@@ -587,6 +587,37 @@ async function ensureStandings({ force = false } = {}) {
   }
 }
 
+let seasonRenderTimer = 0;
+
+function scheduleSeasonRender() {
+  if (seasonRenderTimer) return;
+  seasonRenderTimer = window.setTimeout(() => {
+    seasonRenderTimer = 0;
+    if (app.currentBase?.name === 'season') renderCurrent();
+  }, 250);
+}
+
+function mergeSeasonBatch(games) {
+  if (!Array.isArray(games) || !games.length) return;
+  const merged = new Map((app.season?.games || []).map((game) => [game.id, game]));
+  for (const game of games) merged.set(game.id, game);
+  const list = [...merged.values()].sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+  const phases = {};
+  for (const game of list) phases[game.phase] = (phases[game.phase] || 0) + 1;
+  app.season = {
+    season: app.season?.season || '2026-27',
+    games: list,
+    count: list.length,
+    phases,
+    firstGame: list[0]?.startTime || null,
+    lastGame: list.at(-1)?.startTime || null,
+    source: 'ESPN',
+    partial: true,
+  };
+  app.seasonLoading = true;
+  scheduleSeasonRender();
+}
+
 async function ensureSeason({ force = false } = {}) {
   if (app.season && !force) return app.season;
   if (app.seasonPromise && !force) return app.seasonPromise;
@@ -594,7 +625,10 @@ async function ensureSeason({ force = false } = {}) {
   app.seasonError = null;
   const promise = (async () => {
     try {
-      app.season = await api.getSeasonSchedule({ force });
+      app.season = await api.getSeasonSchedule({
+        force,
+        onBatch: (games) => mergeSeasonBatch(games),
+      });
       app.lastUpdated = Date.now();
       return app.season;
     } catch (err) {
@@ -603,6 +637,7 @@ async function ensureSeason({ force = false } = {}) {
     } finally {
       app.seasonLoading = false;
       app.seasonPromise = null;
+      if (app.currentBase?.name === 'season') renderCurrent();
     }
   })();
   app.seasonPromise = promise;

@@ -183,7 +183,52 @@ export function getCalendar() {
   );
 }
 
-export function getSeasonSchedule({ force = false } = {}) {
+async function streamServerSeason(onBatch) {
+  let res;
+  try {
+    res = await fetch('/api/season-stream', {
+      headers: { accept: 'application/x-ndjson' },
+      signal: AbortSignal.timeout(120000),
+      cache: 'no-store',
+    });
+  } catch {
+    throw new ApiError('赛季数据流连接失败', 0);
+  }
+  if (!res.ok || !res.body) {
+    throw new ApiError(`赛季数据流请求失败（${res.status}）`, res.status);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let done = null;
+  while (true) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    buffer += decoder.decode(chunk.value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      let message;
+      try {
+        message = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (message.type === 'batch' && Array.isArray(message.games)) {
+        onBatch?.(message.games, message);
+      } else if (message.type === 'done') {
+        done = message.data;
+      } else if (message.type === 'error') {
+        throw new ApiError(message.message || '赛季赛程加载失败', 0);
+      }
+    }
+  }
+  if (!done) throw new ApiError('赛季数据流提前中断', 0);
+  return done;
+}
+
+export function getSeasonSchedule({ force = false, onBatch = null } = {}) {
   if (!force) {
     const saved = readJSON(SEASON_CACHE);
     if (
@@ -199,9 +244,13 @@ export function getSeasonSchedule({ force = false } = {}) {
     'season-schedule',
     60 * 60 * 1000,
     async () => {
-      const data = STANDALONE
-        ? await espn.getSeasonSchedule()
-        : await request('/api/season-schedule', { timeout: 120000 });
+      const data = onBatch
+        ? STANDALONE
+          ? await espn.streamSeasonSchedule(onBatch)
+          : await streamServerSeason(onBatch)
+        : STANDALONE
+          ? await espn.getSeasonSchedule()
+          : await request('/api/season-schedule', { timeout: 120000 });
       writeJSON(SEASON_CACHE, { savedAt: Date.now(), data });
       return data;
     },

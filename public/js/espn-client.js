@@ -671,3 +671,52 @@ export async function getSeasonSchedule() {
     fetchedAt: new Date().toISOString(),
   };
 }
+
+export async function streamSeasonSchedule(onBatch) {
+  try {
+    const day = await getDay(todayStr());
+    const preview = (day.games || []).map((game) => {
+      const phase = phaseForGame(game);
+      return { ...game, phase, phaseLabel: phaseLabelFor(game, phase) };
+    });
+    if (preview.length) onBatch?.(preview, { preview: true });
+  } catch {
+    /* preview is optional */
+  }
+  const teamData = await getTeams();
+  const queue = [...(teamData.teams || [])];
+  const collected = new Map();
+  const workers = Array.from({ length: 8 }, async () => {
+    while (queue.length) {
+      const team = queue.shift();
+      if (!team) break;
+      try {
+        const fresh = [];
+        for (const game of await getTeamSeasonEvents(team.id)) {
+          if (collected.has(game.id)) continue;
+          const phase = phaseForGame(game);
+          const normalized = { ...game, phase, phaseLabel: phaseLabelFor(game, phase) };
+          collected.set(game.id, normalized);
+          fresh.push(normalized);
+        }
+        if (fresh.length) onBatch?.(fresh, { totalTeams: teamData.teams?.length || 0 });
+      } catch {
+        // Keep going; one bad team should not block the rest.
+      }
+    }
+  });
+  await Promise.all(workers);
+  const games = [...collected.values()].sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+  const phases = {};
+  for (const game of games) phases[game.phase] = (phases[game.phase] || 0) + 1;
+  return {
+    season: `${Number(SEASON) - 1}-${String(Number(SEASON)).slice(-2)}`,
+    games,
+    count: games.length,
+    phases,
+    firstGame: games[0]?.startTime || null,
+    lastGame: games.at(-1)?.startTime || null,
+    source: 'ESPN',
+    fetchedAt: new Date().toISOString(),
+  };
+}

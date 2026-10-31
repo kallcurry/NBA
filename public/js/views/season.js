@@ -157,7 +157,7 @@ export function renderSeason({
       <header class="page-head page-head--simple">
         <div><div class="skeleton skeleton--eyebrow"></div><div class="skeleton skeleton--headline"></div></div>
       </header>
-      <div class="season-loading-card">${spinner()}<div><strong>正在整理整个赛季</strong><p>首次加载需要聚合 30 支球队的赛程，通常 10–30 秒。</p></div></div>
+      <div class="season-loading-card">${spinner()}<div><strong>正在整理整个赛季</strong><p>正在聚合 30 支球队的赛程，比赛会一批一批先显示出来。</p></div></div>
       ${renderDateStrip(todayStr(), [], { compact: true })}
       <div class="skeleton skeleton--teams"></div>
     </div>`;
@@ -235,7 +235,7 @@ export function renderSeason({
 
     ${
       loading
-        ? `<div class="inline-loading">${spinner()}正在更新赛季赛程…</div>`
+        ? `<div class="inline-loading">${spinner()}正在加载赛季赛程… 已到 ${allGames.length} 场，后续比赛会继续出现</div>`
         : ''
     }
     ${
