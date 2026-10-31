@@ -46,6 +46,11 @@ public class MainActivity extends Activity {
         Window window = getWindow();
         window.setStatusBarColor(Color.rgb(14, 21, 38));
         window.setNavigationBarColor(Color.rgb(14, 21, 38));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 15 enforces edge-to-edge for targetSdk 35. Draw the
+            // app under the bars and add the real insets to the root view.
+            window.setDecorFitsSystemWindows(false);
+        }
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.rgb(14, 21, 38));
@@ -65,7 +70,7 @@ public class MainActivity extends Activity {
         settings.setDisplayZoomControls(false);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
-        settings.setUserAgentString(settings.getUserAgentString() + " CourtsideAndroid/1.1.0");
+        settings.setUserAgentString(settings.getUserAgentString() + " CourtsideAndroid/1.1.1");
 
         webView.addJavascriptInterface(new NativeBridge(), "CourtsideNative");
         webView.setWebViewClient(new LocalWebViewClient());
@@ -76,8 +81,6 @@ public class MainActivity extends Activity {
             }
         });
 
-        applySystemBarPadding(webView);
-
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(14, 21, 38));
         root.addView(webView, new FrameLayout.LayoutParams(
@@ -85,6 +88,7 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT
         ));
         setContentView(root);
+        applySystemBarPadding(root);
 
         handleGameIntent(getIntent());
         webView.loadUrl(START_URL);
@@ -92,10 +96,12 @@ public class MainActivity extends Activity {
 
     private void applySystemBarPadding(View view) {
         view.setOnApplyWindowInsetsListener((v, insets) -> {
-            v.setPadding(0, insets.getSystemWindowInsetTop(), 0, insets.getSystemWindowInsetBottom());
+            int top = insets.getSystemWindowInsetTop();
+            int bottom = insets.getSystemWindowInsetBottom();
+            v.setPadding(0, top, 0, bottom);
             return insets;
         });
-        view.requestApplyInsets();
+        view.post(() -> view.requestApplyInsets());
     }
 
     private void handleGameIntent(Intent intent) {
@@ -239,7 +245,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public String appVersion() {
-            return "1.1.0";
+            return "1.1.1";
         }
 
         @JavascriptInterface

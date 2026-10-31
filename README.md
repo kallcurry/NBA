@@ -238,13 +238,15 @@ export ANDROID_HOME=/path/to/android-sdk
 产物：
 
 ```text
-android/dist/courtside-1.1.0.apk
+android/dist/courtside-1.1.1.apk
 ```
+
+1.1.1 修复了 Android 15 / 全面屏手机上顶栏与状态栏重叠的问题，并处理了底部手势条遮挡。
 
 安装：
 
 ```bash
-adb install -r android/dist/courtside-1.1.0.apk
+adb install -r android/dist/courtside-1.1.1.apk
 ```
 
 说明：

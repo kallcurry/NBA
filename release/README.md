@@ -1,19 +1,26 @@
 # 场边 NBA · Android APK
 
-- 文件：`courtside-1.1.0.apk`
-- 版本：1.1.0
+- 最新文件：`courtside-1.1.1.apk`
+- 版本：1.1.1（versionCode 2）
 - 包名：`com.courtside.nba`
 - 最低系统：Android 8.0 / API 26
 - 大小：约 379 KB
 - 签名：debug keystore（个人安装包，不适合直接上架应用商店）
+
+## 1.1.1 修复
+
+- 修复 Android 15 / 全面屏手机上页面顶栏与状态栏重叠的问题。
+- 加入系统栏 inset 处理，顶部不再压住时间和信号图标，底部导航栏也不会被手势条遮挡。
 
 ## 安装
 
 手机允许“安装未知来源应用”后直接打开 APK，或：
 
 ```bash
-adb install -r courtside-1.1.0.apk
+adb install -r courtside-1.1.1.apk
 ```
+
+已安装 1.1.0 可以直接覆盖安装，数据会保留。
 
 ## 通知
 

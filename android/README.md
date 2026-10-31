@@ -17,7 +17,7 @@ export ANDROID_HOME=/path/to/android-sdk
 ./build-apk.sh
 ```
 
-The APK is written to `android/dist/courtside-1.1.0.apk`.
+The APK is written to `android/dist/courtside-1.1.1.apk`.
 
 The `android/` directory also contains a normal Gradle project for Android
 Studio. `local.properties` and the generated debug keystore are intentionally
