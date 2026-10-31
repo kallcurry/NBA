@@ -161,11 +161,17 @@ export function renderGameDetail({
           )}</span>
         </div>
         <div class="detail-actions">
-          <button class="btn btn--ghost btn--sm ${hasReminder ? 'is-on' : ''}" data-action="toggle-reminder" data-id="${
-            g.id
-          }" data-date="${beijingDateOf(g.startTime)}">
-            ${icon(hasReminder ? 'bell-ring' : 'bell')}<span class="btn__label">${hasReminder ? '已设提醒' : '开赛提醒'}</span>
-          </button>
+          ${
+            g.status.state === 'pre'
+              ? `<button class="btn btn--ghost btn--sm ${hasReminder ? 'is-on' : ''}" data-action="toggle-reminder" data-id="${
+                  g.id
+                }" data-date="${beijingDateOf(g.startTime)}">
+                  ${icon(hasReminder ? 'bell-ring' : 'bell')}<span class="btn__label">${
+                    hasReminder ? '已设提醒' : '开赛提醒'
+                  }</span>
+                </button>`
+              : ''
+          }
           <button class="btn btn--ghost btn--sm" data-action="download-ics" data-id="${g.id}">
             ${icon('calendar-plus')}<span class="btn__label">加入日历</span>
           </button>

@@ -173,9 +173,15 @@ export function renderGameRow(game, { reminders = {}, favorites = [] } = {}) {
     </div>
     <div class="game-row__side">
       <div class="game-row__broadcasts">${broadcastChips(game.broadcasts, { max: 1, compact: true })}</div>
-      <button class="icon-btn bell-btn ${hasReminder ? 'is-on' : ''}" data-action="toggle-reminder" data-id="${game.id}" data-date="${beijingDateOf(game.startTime)}" aria-label="${hasReminder ? '取消提醒' : '设置开赛提醒'}" title="${hasReminder ? '已设置提醒' : '设置开赛提醒'}">
-        ${icon(hasReminder ? 'bell-ring' : 'bell')}
-      </button>
+      ${
+        pre
+          ? `<button class="icon-btn bell-btn ${hasReminder ? 'is-on' : ''}" data-action="toggle-reminder" data-id="${game.id}" data-date="${beijingDateOf(
+              game.startTime,
+            )}" aria-label="${hasReminder ? '取消提醒' : '设置开赛提醒'}" title="${
+              hasReminder ? '已设置提醒' : '设置开赛提醒'
+            }">${icon(hasReminder ? 'bell-ring' : 'bell')}</button>`
+          : ''
+      }
       <span class="game-row__chevron">${icon('chevron-right')}</span>
     </div>
   </article>`;

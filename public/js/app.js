@@ -1035,6 +1035,12 @@ function toggleReminder(id, date) {
     toast('比赛信息还没准备好', { type: 'error' });
     return;
   }
+  if (game.status.state !== 'pre') {
+    toast(game.status.state === 'in' ? '比赛已经开始，开赛提醒已错过' : '比赛已经结束，不能设置开赛提醒', {
+      type: 'error',
+    });
+    return;
+  }
   const meta = {
     label: `${cnName(game.away)} vs ${cnName(game.home)}`,
     startTime: game.startTime,
