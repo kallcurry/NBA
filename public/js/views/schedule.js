@@ -159,7 +159,7 @@ export function renderSchedule({
           </div>
         </div>
 
-        ${stale ? `<div class="stale-banner">${icon('wifi-off')}<span>正在展示缓存数据</span><button class="text-link" data-action="retry-data">重连</button></div>` : ''}
+        ${stale ? `<div class="stale-banner">${icon(loading ? 'refresh' : 'wifi-off')}<span>${loading ? '正在显示本机赛程，联网更新中…' : '正在展示缓存赛程，比分与开赛时间可能已更新'}</span>${loading ? '' : '<button class="text-link" data-action="retry-data">重试更新</button>'}</div>` : ''}
         ${error ? `<div class="inline-error">${icon('info')}${error}</div>` : ''}
 
         ${

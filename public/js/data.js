@@ -2,6 +2,14 @@
 
 export const TZ = 'Asia/Shanghai';
 
+// Intl constructors are expensive in Android WebView. Reuse them across rows.
+const dayFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+});
+const timeFormatter = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false,
+});
+
 export const TEAM_CN = {
   ATL: '老鹰',
   BOS: '凯尔特人',
@@ -171,6 +179,19 @@ export function broadcastShort(name = '') {
   return name.replace(/\s*\([^)]*\)/g, '').replace(' Sports', '').trim();
 }
 
+export const WATCH_SOURCES = [
+  {
+    id: 'jrskan', name: 'JRSKAN', short: 'JRS', region: '第三方赛事站',
+    tone: '#6d8cff', url: 'https://www.jrskan.com/?ref=www.dhhao.com',
+    description: '打开赛事列表，在站内选择比赛和播放线路。', cta: '打开 JRSKAN',
+  },
+  {
+    id: 'jrs16', name: 'JRS16 手机版', short: 'JRS16', region: '第三方赛事站 · 手机',
+    tone: '#5ee0b2', url: 'https://m.jrs16.com/',
+    description: '手机赛事入口，比赛和播放线路以站点实时页面为准。', cta: '打开 JRS16',
+  },
+];
+
 export const PLATFORMS = [
   {
     id: 'league-pass',
@@ -332,22 +353,12 @@ const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四
 const WEEKDAYS_SHORT = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
 export function todayStr() {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
+  return dayFormatter.format(new Date());
 }
 
 export function beijingDateOf(iso) {
   if (!iso) return todayStr();
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(iso));
+  return dayFormatter.format(new Date(iso));
 }
 
 export function addDays(dateStr, delta) {
@@ -364,12 +375,7 @@ export function dateParts(dateStr) {
 
 export function fmtTime(iso) {
   if (!iso) return '--:--';
-  return new Intl.DateTimeFormat('zh-CN', {
-    timeZone: TZ,
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(new Date(iso));
+  return timeFormatter.format(new Date(iso));
 }
 
 export function fmtDateLong(dateStr) {

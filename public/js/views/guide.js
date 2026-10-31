@@ -2,6 +2,7 @@
 
 import { beijingDateOf, cnName, fmtTime, PLATFORMS, relativeDay } from '../data.js';
 import { icon, logo } from '../ui.js';
+import { renderWatchSources } from '../components/watch-sources.js';
 
 const FAQ = [
   {
@@ -17,8 +18,8 @@ const FAQ = [
     a: '先看腾讯体育、咪咕视频和央视体育的当日节目单：前两者场次较多、需要会员或单场券，央视体育以重点场次为主且免费。具体以平台当天排播为准。',
   },
   {
-    q: '场边会提供“免费直播源”吗？',
-    a: '不会。我们只聚合官方和持权平台的入口。非官方直播源通常伴随盗链、恶意广告、账号泄露和版权风险，也不稳定，不建议使用。',
+    q: '怎么使用 JRSKAN 和 JRS16？',
+    a: '在“直播源”里点开站点，再按球队和开赛时间选择比赛。Android APK 会交给系统浏览器打开，比赛详情中的“观看直播”也能找到相同入口。',
   },
   {
     q: '为什么开赛提醒没有响？',
@@ -65,7 +66,7 @@ export function renderGuide({ day = null } = {}) {
       <div class="guide-hero__copy">
         <div class="eyebrow">${icon('guide')}观赛指南 <span>/ WATCH GUIDE</span></div>
         <h1>把球看懂，<br />也把路走对<span class="title-dot">.</span></h1>
-        <p>比赛在哪看、为什么黑屏、哪个平台适合你。这里只列官方与持权渠道，不碰来路不明的直播源。</p>
+        <p>选择直播源或观赛平台，按球队和开赛时间找到比赛。</p>
         <div class="guide-hero__actions">
           <a class="btn btn--primary" href="#/today">看今日比赛 ${icon('arrow-right')}</a>
           <a class="btn btn--ghost" href="https://www.nba.com/schedule" target="_blank" rel="noopener noreferrer">NBA 官方赛程 ${icon(
@@ -95,8 +96,8 @@ export function renderGuide({ day = null } = {}) {
       <div class="guide-step">
         <span class="guide-step__num">02</span>
         <span class="guide-step__icon">${icon('tv')}</span>
-        <h3>再选一个持权平台</h3>
-        <p>按你所在地区选官方渠道。全美直播、地方台和 League Pass 的场次各不相同。</p>
+        <h3>再选一个观赛入口</h3>
+        <p>打开直播源或平台页面，按球队和开赛时间选择比赛。</p>
       </div>
       <div class="guide-step">
         <span class="guide-step__num">03</span>
@@ -105,6 +106,8 @@ export function renderGuide({ day = null } = {}) {
         <p>点比赛右侧的铃铛。开赛前 15 分钟，浏览器会弹出通知，不用一直守着。</p>
       </div>
     </section>
+
+    <section class="guide-section">${renderWatchSources()}</section>
 
     <section class="guide-section">
       <div class="section-head">
@@ -188,7 +191,7 @@ export function renderGuide({ day = null } = {}) {
       <span class="legal-note__icon">${icon('info')}</span>
       <div>
         <strong>关于直播源</strong>
-        <p>场边不收录、不托管、不推荐任何非官方直播源，包括声称免费的第三方聚合站和盗链站。页面中的“观看”入口只指向 NBA、ESPN、NBC、Peacock、腾讯体育、咪咕视频、央视体育等官方或持权平台。版权归属各权利人所有。</p>
+        <p>场边提供 JRSKAN、JRS16 与各观赛平台的站点入口，不托管视频。赛事与线路可用性以站点页面为准，版权归属各权利人所有。</p>
       </div>
     </div>
   </div>`;

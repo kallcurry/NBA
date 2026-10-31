@@ -17,7 +17,7 @@ export ANDROID_HOME=/path/to/android-sdk
 ./build-apk.sh
 ```
 
-The APK is written to `android/dist/courtside-1.1.7.apk`.
+The APK is written to `android/dist/courtside-1.1.8.apk`.
 
 The `android/` directory also contains a normal Gradle project for Android
 Studio. `local.properties` and the generated debug keystore are intentionally
@@ -34,6 +34,14 @@ falls back to an inexact alarm.
 Notifications tap through to `#/game/<id>`.
 
 ## Data
+
+A timestamped 1,200-game snapshot is bundled at `public/assets/season-2027.json`.
+Season and day views show local schedules first and refresh in the background;
+cached data is labelled until a live request succeeds. Refresh the snapshot before
+a release with `npm run snapshot` from the repository root.
+
+JRSKAN and JRS16 links are available in the watch guide and game watch sheet;
+the APK opens them in the system browser.
 
 The APK calls `https://site.web.api.espn.com` directly. If ESPN is unreachable
 from your network, the web/Node build (`../server.mjs`) is the fallback.

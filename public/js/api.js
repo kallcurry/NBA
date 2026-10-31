@@ -25,8 +25,8 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path, { timeout = 18000 } = {}) {
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+async function request(path, { timeout = 18000, allowOffline = false } = {}) {
+  if (!allowOffline && typeof navigator !== 'undefined' && navigator.onLine === false) {
     throw new ApiError('当前处于离线状态', 0);
   }
   let res;
@@ -73,8 +73,67 @@ function memo(key, ttl, producer, force = false) {
 /* ------------------------------------------------------------------ */
 const DAY_PREFIX = 'courtside:day:';
 const DAY_INDEX = 'courtside:day-index';
-const SEASON_CACHE = 'courtside:season:v1';
-const SEASON_CACHE_TTL = 12 * 60 * 60 * 1000;
+const SEASON_CACHE = 'courtside:season:v2';
+const SEASON_CACHE_TTL = 15 * 60 * 1000;
+const SEASON_LABEL = `${Number(espn.SEASON) - 1}-${espn.SEASON.slice(-2)}`;
+let seasonSnapshot = null;
+let bundledSnapshotPromise = null;
+
+function validSeason(data) {
+  return data?.season === SEASON_LABEL && !data.partial &&
+    Array.isArray(data.games) && data.games.length > 0;
+}
+
+// Both first-install APKs and returning users can render before the network.
+// A snapshot is always labelled stale until a live request succeeds.
+export async function loadSeasonSnapshot() {
+  if (seasonSnapshot) return seasonSnapshot;
+  const saved = readJSON(SEASON_CACHE);
+  if (validSeason(saved?.data)) {
+    seasonSnapshot = saved;
+    return saved;
+  }
+  if (!STANDALONE) return null;
+  if (!bundledSnapshotPromise) {
+    bundledSnapshotPromise = request(`/assets/season-${espn.SEASON}.json`, { allowOffline: true })
+      .then((data) => {
+        if (!validSeason(data)) return null;
+        seasonSnapshot = { savedAt: Date.parse(data.fetchedAt) || 0, data, bundled: true };
+        return seasonSnapshot;
+      })
+      .catch(() => null);
+  }
+  return bundledSnapshotPromise;
+}
+
+export async function loadCachedDay(date) {
+  const day = loadDaySnapshot(date);
+  const snapshot = await loadSeasonSnapshot();
+  if (day && (!snapshot || day.savedAt >= snapshot.savedAt)) return day;
+  if (!snapshot) return day;
+  // Don't infer an empty day beyond the snapshot's covered season.
+  const first = espnDate(snapshot.data.firstGame);
+  const last = espnDate(snapshot.data.lastGame);
+  if (date < first || date > last) return day;
+  const games = snapshot.data.games.filter((game) => espnDate(game.startTime) === date);
+  return {
+    savedAt: snapshot.savedAt, stale: true,
+    day: {
+      date, timezone: 'Asia/Shanghai', games, count: games.length,
+      liveCount: games.filter((game) => game.status.state === 'in').length,
+      season: { year: Number(espn.SEASON), displayName: SEASON_LABEL },
+      source: 'ESPN', fetchedAt: snapshot.data.fetchedAt,
+    },
+  };
+}
+
+// Use the same Beijing-day conversion as the UI, including games around UTC midnight.
+const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+});
+function espnDate(iso) {
+  return iso ? dateFormatter.format(new Date(iso)) : '';
+}
 
 function readJSON(key) {
   try {
@@ -228,21 +287,17 @@ async function streamServerSeason(onBatch) {
   return done;
 }
 
-export function getSeasonSchedule({ force = false, onBatch = null } = {}) {
-  if (!force) {
-    const saved = readJSON(SEASON_CACHE);
-    if (
-      saved?.savedAt &&
-      Date.now() - saved.savedAt < SEASON_CACHE_TTL &&
-      Array.isArray(saved.data?.games) &&
-      saved.data.games.length
-    ) {
-      return Promise.resolve(saved.data);
-    }
+export async function getSeasonSchedule({ force = false, onBatch = null, onSnapshot = null } = {}) {
+  const snapshot = await loadSeasonSnapshot();
+  if (!force && snapshot && !snapshot.bundled && Date.now() - snapshot.savedAt < SEASON_CACHE_TTL) {
+    return typeof navigator !== 'undefined' && navigator.onLine === false
+      ? { ...snapshot.data, stale: true }
+      : snapshot.data;
   }
+  if (snapshot) onSnapshot?.(snapshot.data);
   return memo(
     'season-schedule',
-    60 * 60 * 1000,
+    SEASON_CACHE_TTL,
     async () => {
       const data = onBatch
         ? STANDALONE
@@ -251,7 +306,17 @@ export function getSeasonSchedule({ force = false, onBatch = null } = {}) {
         : STANDALONE
           ? await espn.getSeasonSchedule()
           : await request('/api/season-schedule', { timeout: 120000 });
-      writeJSON(SEASON_CACHE, { savedAt: Date.now(), data });
+      if (data.partial) {
+        // Never turn a failed/partial aggregation into a long-lived complete cache.
+        throw new ApiError('部分球队赛程未能更新，请重试；当前保留已加载的赛程', 0);
+      }
+      if (!data.games?.length) throw new ApiError('赛季赛程为空，请稍后重试', 0);
+      seasonSnapshot = { savedAt: Date.now(), data };
+      try {
+        // Reclaim the old large snapshot before writing v2 on WebView's quota.
+        localStorage.removeItem('courtside:season:v1');
+      } catch { /* storage may be disabled */ }
+      writeJSON(SEASON_CACHE, seasonSnapshot);
       return data;
     },
     force,

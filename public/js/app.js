@@ -332,7 +332,7 @@ function renderFooter() {
       <span class="site-footer__mark">${brandMark()}</span>
       <div><strong>场边 COURTSIDE</strong><span>每天，准时坐到场边。</span></div>
     </div>
-    <p class="site-footer__note">非 NBA 官方产品。赛程与比分来自 ESPN，直播入口仅指向官方与持权平台，不提供任何非官方直播源。</p>
+    <p class="site-footer__note">非 NBA 官方产品。赛程与比分来自 ESPN；观赛入口包含 JRSKAN、JRS16 与各平台页面。</p>
     <div class="site-footer__links">
       <a href="#/guide">观赛指南</a>
       <a href="https://www.espn.com/nba/" target="_blank" rel="noopener noreferrer">ESPN NBA</a>
@@ -530,7 +530,7 @@ function applyDay(day) {
 }
 
 async function ensureDay(date, { force = false } = {}) {
-  if (!force && app.dayDate === date && app.day) return app.day;
+  if (!force && app.dayDate === date && app.day && !app.stale) return app.day;
   if (app.dayPromise && app.dayPromiseDate === date && !force) return app.dayPromise;
   const token = ++app.dayToken;
   if (app.dayDate !== date) {
@@ -543,13 +543,23 @@ async function ensureDay(date, { force = false } = {}) {
   updateTopbarMeta();
   const promise = (async () => {
     try {
+      if (!app.day) {
+        const snapshot = await api.loadCachedDay(date);
+        if (token !== app.dayToken) return app.day;
+        if (snapshot) {
+          app.day = snapshot.day;
+          app.stale = snapshot;
+          if (['today', 'schedule'].includes(app.currentBase?.name)) renderCurrent();
+        }
+      }
       const day = await api.getScoreboard(date, { force });
       if (token !== app.dayToken) return app.day;
       applyDay(day);
       return day;
     } catch (err) {
       if (token !== app.dayToken) return app.day;
-      const snapshot = api.loadDaySnapshot(date);
+      const snapshot = await api.loadCachedDay(date);
+      if (token !== app.dayToken) return app.day;
       if (snapshot) {
         app.day = snapshot.day;
         app.dayDate = snapshot.day.date;
@@ -607,6 +617,7 @@ function mergeSeasonBatch(games) {
   const phases = {};
   for (const game of list) phases[game.phase] = (phases[game.phase] || 0) + 1;
   app.season = {
+    ...app.season,
     season: app.season?.season || '2026-27',
     games: list,
     count: list.length,
@@ -621,8 +632,9 @@ function mergeSeasonBatch(games) {
 }
 
 async function ensureSeason({ force = false } = {}) {
-  if (app.season && !force) return app.season;
-  if (app.seasonPromise && !force) return app.seasonPromise;
+  if (app.seasonPromise) return app.seasonPromise;
+  if (app.season && !app.season.partial && !app.season.stale && !force &&
+      Date.now() - Date.parse(app.season.fetchedAt) < 15 * 60 * 1000) return app.season;
   app.seasonLoading = true;
   app.seasonError = null;
   const promise = (async () => {
@@ -630,6 +642,10 @@ async function ensureSeason({ force = false } = {}) {
       app.season = await api.getSeasonSchedule({
         force,
         onBatch: (games) => mergeSeasonBatch(games),
+        onSnapshot: (season) => {
+          app.season = { ...season, stale: true };
+          scheduleSeasonRender();
+        },
       });
       app.lastUpdated = Date.now();
       return app.season;
@@ -1272,6 +1288,15 @@ function refreshAction() {
 /* event delegation                                                    */
 /* ------------------------------------------------------------------ */
 document.addEventListener('click', async (event) => {
+  const link = event.target.closest('a[href]');
+  if (!event.defaultPrevented && STANDALONE && window.CourtsideNative?.openExternal && link) {
+    const url = new URL(link.href, location.href);
+    if (/^https?:$/.test(url.protocol) && url.origin !== location.origin) {
+      event.preventDefault();
+      window.CourtsideNative.openExternal(url.href);
+      return;
+    }
+  }
   const target = event.target.closest('[data-action]');
   if (!target) return;
   const action = target.dataset.action;
@@ -1629,6 +1654,13 @@ function boot() {
   setupInstallPrompt();
   setupConnectivity();
   registerServiceWorker();
+  api.loadSeasonSnapshot().then((snapshot) => {
+    if (!snapshot) return;
+    if (!app.calendarDates.length) {
+      app.calendarDates = [...new Set(snapshot.data.games.map((game) => beijingDateOf(game.startTime)))].sort();
+      if (['today', 'schedule'].includes(app.currentBase?.name)) renderCurrent();
+    }
+  });
   ensureAux();
   window.addEventListener('hashchange', handleRoute);
   handleRoute();

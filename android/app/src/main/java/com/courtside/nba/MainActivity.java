@@ -70,7 +70,7 @@ public class MainActivity extends Activity {
         settings.setDisplayZoomControls(false);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
-        settings.setUserAgentString(settings.getUserAgentString() + " CourtsideAndroid/1.1.7");
+        settings.setUserAgentString(settings.getUserAgentString() + " CourtsideAndroid/1.1.8");
 
         webView.addJavascriptInterface(new NativeBridge(), "CourtsideNative");
         webView.setWebViewClient(new LocalWebViewClient());
@@ -245,16 +245,21 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public String appVersion() {
-            return "1.1.7";
+            return "1.1.8";
         }
 
         @JavascriptInterface
         public void openExternal(String url) {
-            try {
-                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
-            } catch (Exception ignored) {
-                // No browser installed.
-            }
+            if (url == null) return;
+            Uri uri = Uri.parse(url);
+            if (!"https".equals(uri.getScheme()) && !"http".equals(uri.getScheme())) return;
+            runOnUiThread(() -> {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, uri));
+                } catch (Exception ignored) {
+                    Toast.makeText(MainActivity.this, "未找到可打开此页面的浏览器", Toast.LENGTH_SHORT).show();
+                }
+            });
         }
     }
 

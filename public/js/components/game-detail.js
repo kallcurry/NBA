@@ -1,4 +1,5 @@
 /* Game detail sheet: scoreboard, box score, play-by-play, preview, watch. */
+import { renderWatchSources } from './watch-sources.js';
 
 import {
   beijingDateOf,
@@ -1148,7 +1149,7 @@ function renderInfo(summary, game) {
       <div class="watch-callout__icon">${icon('tv')}</div>
       <div class="watch-callout__copy">
         <h3>${pre ? '准备看球？' : '想看直播或回放？'}</h3>
-        <p>只走官方与持权平台：League Pass、腾讯体育、咪咕视频、央视体育。</p>
+        <p>选择 JRSKAN、JRS16 或各观赛平台，打开页面查看比赛。</p>
       </div>
       <button class="btn btn--primary btn--sm" data-action="watch" data-id="${game.id}">查看渠道 ${icon('arrow-right')}</button>
     </section>
@@ -1165,7 +1166,7 @@ export function renderWatchSheet(game) {
   return `<div class="watch-sheet" data-kind="watch">
     <div class="sheet__head">
       <div>
-        <span class="eyebrow eyebrow--small">${icon('tv')}官方观赛入口</span>
+        <span class="eyebrow eyebrow--small">${icon('tv')}观赛入口</span>
         <h2>在哪看 ${cnName(game.away)} vs ${cnName(game.home)}</h2>
         <p>${fmtTime(game.startTime)} · 北京时间 · ${relativeDay(beijingDateOf(game.startTime))}</p>
       </div>
@@ -1173,6 +1174,7 @@ export function renderWatchSheet(game) {
     </div>
 
     <div class="watch-sheet__body">
+      ${renderWatchSources()}
       <section class="watch-block">
         <div class="watch-block__head">
           <h3>本场官方转播</h3>
@@ -1225,8 +1227,8 @@ export function renderWatchSheet(game) {
       <div class="legal-note">
         <span class="legal-note__icon">${icon('info')}</span>
         <div>
-          <strong>场边不提供任何非官方直播源。</strong>
-          <p>我们只聚合官方与持权平台的入口，不收录第三方聚合站、盗链站或“免费直播”页面，避免恶意广告和账号风险。NBA 的转播版权按地区划分，部分场次可能出现黑屏或不可用，属于正常现象。</p>
+          <strong>直播源与平台入口</strong>
+          <p>JRSKAN、JRS16 为第三方站点入口。请在站内按球队和开赛时间选择比赛，场次和线路以实时页面为准；场边不托管视频。</p>
         </div>
       </div>
     </div>

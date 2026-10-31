@@ -33,6 +33,9 @@ jobs:
           node --check server.mjs
           find public/js -name '*.js' -print0 | xargs -0 -n1 node --check
 
+      - name: Test schedule cache and watch sources
+        run: npm test
+
       - name: Smoke test the app
         run: |
           node server.mjs > /tmp/courtside.log 2>&1 &

@@ -1,11 +1,18 @@
 # 场边 NBA · Android APK
 
-- 最新文件：`courtside-1.1.7.apk`
-- 版本：1.1.7（versionCode 8）
+- 最新文件：`courtside-1.1.8.apk`
+- 版本：1.1.8（versionCode 9）
 - 包名：`com.courtside.nba`
 - 最低系统：Android 8.0 / API 26
-- 大小：约 379 KB
+- 大小：约 448 KB
 - 签名：debug keystore（个人安装包，不适合直接上架应用商店）
+
+## 1.1.8 更新
+
+- 增加 JRSKAN、JRS16 手机版入口，在观赛指南和比赛详情中可直接打开；APK 使用系统浏览器。
+- 内置 1200 场赛程快照，赛季、赛程和日历先显示本机数据，再联网更新；缓存会明确标记。
+- 复用日期格式化器、合并重复 ESPN 请求，避免不完整请求覆盖缓存。
+- 使用与仓库 1.1.7 安装包相同的签名，可覆盖升级保留偏好与提醒。
 
 ## 1.1.7 更新
 
@@ -18,7 +25,7 @@
 手机允许“安装未知来源应用”后直接打开 APK，或：
 
 ```bash
-adb install -r courtside-1.1.7.apk
+adb install -r courtside-1.1.8.apk
 ```
 
 已安装旧版本可以直接覆盖安装，数据会保留。
@@ -39,7 +46,7 @@ adb install -r courtside-1.1.7.apk
 
 ## 数据
 
-APK 直接访问 `site.web.api.espn.com`，不需要在手机上运行 Node 服务。若手机网络无法访问 ESPN，数据会加载失败，请改用 Node 服务版本或配置可访问的代理。
+APK 直接访问 `site.web.api.espn.com`，不需要在手机上运行 Node 服务。若手机网络无法访问 ESPN，会继续显示带缓存标记的本机赛程；实时比分需要联网。
 
 ## 校验
 

@@ -13,10 +13,28 @@
 // app. site.api.espn.com frequently returns Akamai 403s to browser requests.
 const ESPN = 'https://site.web.api.espn.com/apis/site/v2/sports/basketball/nba';
 const ESPN_V2 = 'https://site.web.api.espn.com/apis/v2/sports/basketball/nba';
-const SEASON = '2027';
+export const SEASON = '2027';
 const TZ = 'Asia/Shanghai';
+const dayFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+});
+const requests = new Map();
+const responses = new Map();
 
-async function fetchJSON(url) {
+function fetchJSON(url, { ttl = 0 } = {}) {
+  const hit = responses.get(url);
+  if (hit?.expires > Date.now()) return Promise.resolve(hit.data);
+  if (requests.has(url)) return requests.get(url);
+  const promise = requestJSON(url).then((data) => {
+    if (ttl) responses.set(url, { data, expires: Date.now() + ttl });
+    for (const [key, value] of responses) if (value.expires <= Date.now()) responses.delete(key);
+    return data;
+  }).finally(() => requests.delete(url));
+  requests.set(url, promise);
+  return promise;
+}
+
+async function requestJSON(url) {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     throw new Error('当前处于离线状态');
   }
@@ -50,12 +68,7 @@ const num = (v) => {
 };
 
 function beijingDate(iso) {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(iso));
+  return dayFormatter.format(new Date(iso));
 }
 
 function addDays(dateStr, delta) {
@@ -194,7 +207,7 @@ function normalizeEvent(event) {
 }
 
 async function scoreboardForDate(dateStr) {
-  return fetchJSON(`${ESPN}/scoreboard?dates=${compact(dateStr)}`);
+  return fetchJSON(`${ESPN}/scoreboard?dates=${compact(dateStr)}`, { ttl: 7000 });
 }
 
 export async function getDay(dateStr) {
@@ -206,7 +219,7 @@ export async function getDay(dateStr) {
   for (const result of [prev, current]) {
     if (result.status === 'fulfilled') raws.push(result.value);
   }
-  if (!raws.length) throw new Error('暂时连不上 NBA 数据源，请稍后重试。');
+  if (raws.length !== 2) throw new Error('当天赛程尚未完整更新，请稍后重试。');
 
   const seen = new Set();
   const games = [];
@@ -482,7 +495,7 @@ const STANDING_KEYS = {
 };
 
 export async function getStandings() {
-  const data = await fetchJSON(`${ESPN_V2}/standings?season=${SEASON}`);
+  const data = await fetchJSON(`${ESPN_V2}/standings?season=${SEASON}`, { ttl: 3 * 60 * 1000 });
   const conferences = (data.children || []).map((conf) => ({
     id: String(conf.id),
     name: conf.name,
@@ -635,58 +648,18 @@ async function getTeamSeasonEvents(teamId) {
 }
 
 export async function getSeasonSchedule() {
-  const teamData = await getTeams();
-  const queue = [...(teamData.teams || [])];
-  const collected = new Map();
-  const workers = Array.from({ length: 4 }, async () => {
-    while (queue.length) {
-      const team = queue.shift();
-      if (!team) break;
-      try {
-        for (const game of await getTeamSeasonEvents(team.id)) {
-          if (!collected.has(game.id)) collected.set(game.id, game);
-        }
-      } catch {
-        // One team failing should not erase the rest of the season.
-      }
-    }
-  });
-  await Promise.all(workers);
-  const games = [...collected.values()]
-    .map((game) => {
-      const phase = phaseForGame(game);
-      return { ...game, phase, phaseLabel: phaseLabelFor(game, phase) };
-    })
-    .sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
-  const phases = {};
-  for (const game of games) phases[game.phase] = (phases[game.phase] || 0) + 1;
-  return {
-    season: `${Number(SEASON) - 1}-${String(Number(SEASON)).slice(-2)}`,
-    games,
-    count: games.length,
-    phases,
-    firstGame: games[0]?.startTime || null,
-    lastGame: games.at(-1)?.startTime || null,
-    source: 'ESPN',
-    fetchedAt: new Date().toISOString(),
-  };
+  return streamSeasonSchedule();
 }
 
 export async function streamSeasonSchedule(onBatch) {
-  try {
-    const day = await getDay(todayStr());
-    const preview = (day.games || []).map((game) => {
-      const phase = phaseForGame(game);
-      return { ...game, phase, phaseLabel: phaseLabelFor(game, phase) };
-    });
-    if (preview.length) onBatch?.(preview, { preview: true });
-  } catch {
-    /* preview is optional */
-  }
+  // Start the actual season immediately; don't put a two-request day preview
+  // on the critical path. api.js supplies the local preview independently.
   const teamData = await getTeams();
   const queue = [...(teamData.teams || [])];
+  if (!queue.length) throw new Error('暂时无法读取球队目录，请重试');
   const collected = new Map();
-  const workers = Array.from({ length: 8 }, async () => {
+  let failedTeams = 0;
+  const workers = Array.from({ length: 6 }, async () => {
     while (queue.length) {
       const team = queue.shift();
       if (!team) break;
@@ -701,18 +674,21 @@ export async function streamSeasonSchedule(onBatch) {
         }
         if (fresh.length) onBatch?.(fresh, { totalTeams: teamData.teams?.length || 0 });
       } catch {
-        // Keep going; one bad team should not block the rest.
+        failedTeams++;
       }
     }
   });
   await Promise.all(workers);
   const games = [...collected.values()].sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+  if (!games.length) throw new Error('赛季赛程加载失败，请稍后重试');
   const phases = {};
   for (const game of games) phases[game.phase] = (phases[game.phase] || 0) + 1;
   return {
     season: `${Number(SEASON) - 1}-${String(Number(SEASON)).slice(-2)}`,
     games,
     count: games.length,
+    partial: failedTeams > 0,
+    failedTeams,
     phases,
     firstGame: games[0]?.startTime || null,
     lastGame: games.at(-1)?.startTime || null,

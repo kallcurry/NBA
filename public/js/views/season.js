@@ -158,7 +158,7 @@ export function renderSeason({
       <header class="page-head page-head--simple">
         <div><div class="skeleton skeleton--eyebrow"></div><div class="skeleton skeleton--headline"></div></div>
       </header>
-      <div class="season-loading-card">${spinner()}<div><strong>正在整理整个赛季</strong><p>正在聚合 30 支球队的赛程，比赛会一批一批先显示出来。</p></div></div>
+      <div class="season-loading-card">${spinner()}<div><strong>正在打开赛季赛程</strong><p>先显示本机已有赛程，再联网更新比赛信息。</p></div></div>
       ${renderDateStrip(todayStr(), [], { compact: true })}
       <div class="skeleton skeleton--teams"></div>
     </div>`;
@@ -251,9 +251,11 @@ export function renderSeason({
 
     ${monthStrip(months, selectedMonth)}
 
+    ${season.stale || season.partial ? `<div class="stale-banner">${icon('info')}<span>正在展示本机赛程${season.fetchedAt ? `（${beijingDateOf(season.fetchedAt)}更新）` : ''}，${loading ? '联网更新中…' : '部分比赛信息可能尚未更新'}</span></div>` : ''}
+
     ${
       loading
-        ? `<div class="inline-loading">${spinner()}正在加载赛季赛程… 已到 ${allGames.length} 场，后续比赛会继续出现</div>`
+        ? `<div class="inline-loading">${spinner()}正在更新赛季赛程，当前可查看 ${allGames.length} 场</div>`
         : ''
     }
     ${
