@@ -63,12 +63,12 @@ function seasonRow(game, { reminders = {} } = {}) {
   return `<article class="season-row ${st.live ? 'is-live' : ''} ${game.phase === 'playoffs' ? 'is-playoff' : ''}" data-action="open-game" data-id="${game.id}" data-game-id="${game.id}" tabindex="0" role="button" aria-label="${cnName(game.away)} vs ${cnName(game.home)}">
     <div class="season-row__teams">
       <div class="season-team ${game.away.winner ? 'is-winner' : ''}">
-        ${logo(game.away, 'xs', '', true)}
+        ${logo(game.away, 'md', '', true)}
         <span>${cnName(game.away)}</span>
         <b>${pre ? '—' : game.away.score}</b>
       </div>
       <div class="season-team ${game.home.winner ? 'is-winner' : ''}">
-        ${logo(game.home, 'xs', '', true)}
+        ${logo(game.home, 'md', '', true)}
         <span>${cnName(game.home)}</span>
         <b>${pre ? '—' : game.home.score}</b>
       </div>
