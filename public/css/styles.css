@@ -6763,3 +6763,146 @@ ol {
     font-size: 8px;
   }
 }
+
+/* Custom reminder lead picker */
+.setting-row--stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.lead-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+.lead-option {
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 10px;
+  color: var(--muted);
+  transition: border-color 0.16s, background 0.16s, color 0.16s;
+}
+.lead-option:hover {
+  border-color: var(--line-strong);
+  color: var(--text-soft);
+}
+.lead-option.is-active {
+  border-color: rgba(109, 140, 255, 0.48);
+  background: rgba(109, 140, 255, 0.12);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Custom season team picker */
+.season-team-select {
+  position: relative;
+}
+.season-team-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 34px;
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 10px;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+.season-team-trigger .icon {
+  width: 12px;
+  height: 12px;
+  color: var(--muted-2);
+}
+.season-team-trigger[aria-expanded='true'] {
+  border-color: rgba(109, 140, 255, 0.45);
+}
+.team-picker {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 7px);
+  right: 0;
+  width: min(276px, calc(100vw - 30px));
+  border: 1px solid var(--line-strong);
+  border-radius: 13px;
+  background: var(--surface);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+.team-picker__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 12px 9px;
+  border-bottom: 1px solid var(--line);
+  font-size: 10px;
+  color: var(--muted);
+}
+.team-picker__head .icon-btn {
+  width: 24px;
+  height: 24px;
+}
+.team-picker__list {
+  max-height: min(330px, 54vh);
+  overflow-y: auto;
+  padding: 5px;
+}
+.team-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 7px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: left;
+}
+.team-option:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-soft);
+}
+.team-option.is-active {
+  background: rgba(109, 140, 255, 0.12);
+  color: var(--text);
+}
+.team-option em {
+  margin-left: auto;
+  font-style: normal;
+  font-family: var(--font-display);
+  font-size: 8px;
+  color: var(--muted-2);
+}
+.team-option__all {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--muted-2);
+}
+.team-option__all .icon {
+  width: 16px;
+  height: 16px;
+}
+@media (max-width: 560px) {
+  .lead-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .lead-option {
+    height: 36px;
+  }
+  .season-team-select {
+    margin-left: auto;
+  }
+  .season-team-trigger {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

@@ -92,15 +92,19 @@ export function renderSettings({
         <div class="settings-section__head"><h3>通知</h3><span>${permission === 'granted' ? '已授权' : '仅本机'}</span></div>
         ${permissionCard(permission, settings.notificationsEnabled)}
         <div class="setting-list">
-          <div class="setting-row">
-            <div class="setting-row__copy"><strong>开赛提醒</strong><span>在跳球前提醒你</span></div>
-            <select class="select" data-action="set-lead" aria-label="提前多久提醒">
+          <div class="setting-row setting-row--stack">
+            <div class="setting-row__copy"><strong>开赛提醒</strong><span>在跳球前提醒你，选一个提前量</span></div>
+            <div class="lead-options" role="radiogroup" aria-label="提前多久提醒">
               ${[5, 10, 15, 30, 60, 120]
-                .map((m) => `<option value="${m}" ${Number(settings.lead) === m ? 'selected' : ''}>提前 ${
-                  m >= 60 ? `${m / 60} 小时` : `${m} 分钟`
-                }</option>`)
+                .map(
+                  (m) => `<button class="lead-option ${
+                    Number(settings.lead) === m ? 'is-active' : ''
+                  }" data-action="set-lead" data-value="${m}" role="radio" aria-checked="${
+                    Number(settings.lead) === m
+                  }">${m >= 60 ? `${m / 60} 小时` : `${m} 分钟`}</button>`,
+                )
                 .join('')}
-            </select>
+            </div>
           </div>
           ${switchRow({
             key: 'start',

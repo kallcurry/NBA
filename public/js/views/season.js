@@ -148,6 +148,7 @@ export function renderSeason({
   phase = 'all',
   month = '',
   team = 'all',
+  teamOpen = false,
   teams = [],
   favorites = [],
   reminders = {},
@@ -209,17 +210,34 @@ export function renderSeason({
 
     <section class="season-controls">
       ${phaseTabs(phase, phaseCounts)}
-      <label class="season-team-select">
+      <div class="season-team-select">
         <span>球队</span>
-        <select data-action="season-team" aria-label="按球队筛选">
-          <option value="all" ${team === 'all' ? 'selected' : ''}>全部球队</option>
-          ${teamOptions
-            .map(
-              (t) => `<option value="${t.abbr}" ${team === t.abbr ? 'selected' : ''}>${cnName(t)}</option>`,
-            )
-            .join('')}
-        </select>
-      </label>
+        <button class="season-team-trigger" data-action="toggle-team-picker" aria-expanded="${teamOpen}" aria-haspopup="listbox">
+          ${team === 'all' ? '全部球队' : cnName(teamOptions.find((t) => t.abbr === team) || { name: team })}
+          ${icon('chevron-down')}
+        </button>
+        ${
+          teamOpen
+            ? `<div class="team-picker" data-team-picker>
+                <div class="team-picker__head"><span>选择球队</span><button class="icon-btn" data-action="close-team-picker" aria-label="关闭">${icon('close')}</button></div>
+                <div class="team-picker__list" role="listbox">
+                  <button class="team-option ${team === 'all' ? 'is-active' : ''}" data-action="season-team" data-team="all" role="option" aria-selected="${team === 'all'}">
+                    <span class="team-option__all">${icon('teams')}</span><span>全部球队</span>
+                  </button>
+                  ${teamOptions
+                    .map(
+                      (t) => `<button class="team-option ${
+                        team === t.abbr ? 'is-active' : ''
+                      }" data-action="season-team" data-team="${t.abbr}" role="option" aria-selected="${
+                        team === t.abbr
+                      }">${logo(t, 'xs', '', true)}<span>${cnName(t)}</span><em>${t.abbr}</em></button>`,
+                    )
+                    .join('')}
+                </div>
+              </div>`
+            : ''
+        }
+      </div>
     </section>
 
     ${

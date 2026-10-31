@@ -75,6 +75,7 @@ const app = {
   seasonPhase: 'all',
   seasonMonth: '',
   seasonTeam: 'all',
+  seasonTeamOpen: false,
   standings: null,
   standingsLoading: false,
   standingsError: null,
@@ -463,6 +464,7 @@ function renderCurrent({ keepScroll = true } = {}) {
       phase: app.seasonPhase,
       month: app.seasonMonth,
       team: app.seasonTeam,
+      teamOpen: app.seasonTeamOpen,
       teams: app.teams,
       favorites: store.favorites,
       reminders: store.reminders,
@@ -1398,12 +1400,37 @@ document.addEventListener('click', async (event) => {
       event.preventDefault();
       app.seasonPhase = target.dataset.phase || 'all';
       app.seasonMonth = '';
+      app.seasonTeamOpen = false;
       renderCurrent();
       break;
     case 'season-month':
       event.preventDefault();
       app.seasonMonth = target.dataset.month || '';
+      app.seasonTeamOpen = false;
       renderCurrent();
+      break;
+    case 'toggle-team-picker':
+      event.preventDefault();
+      app.seasonTeamOpen = !app.seasonTeamOpen;
+      renderCurrent();
+      break;
+    case 'close-team-picker':
+      event.preventDefault();
+      app.seasonTeamOpen = false;
+      renderCurrent();
+      break;
+    case 'season-team':
+      event.preventDefault();
+      app.seasonTeam = target.dataset.team || 'all';
+      app.seasonMonth = '';
+      app.seasonTeamOpen = false;
+      renderCurrent();
+      break;
+    case 'set-lead':
+      event.preventDefault();
+      store.updateSettings({ lead: Number(target.dataset.value) });
+      syncNativeReminders(app.day?.games || [], store);
+      refreshSettings();
       break;
     case 'scroll-teams':
       event.preventDefault();
@@ -1447,21 +1474,6 @@ document.addEventListener('click', async (event) => {
   }
 });
 
-document.addEventListener('change', (event) => {
-  const lead = event.target.closest('[data-action="set-lead"]');
-  if (lead) {
-    store.updateSettings({ lead: Number(lead.value) });
-    syncNativeReminders(app.day?.games || [], store);
-    refreshSettings();
-    return;
-  }
-  const team = event.target.closest('[data-action="season-team"]');
-  if (team) {
-    app.seasonTeam = team.value || 'all';
-    app.seasonMonth = '';
-    renderCurrent();
-  }
-});
 
 document.addEventListener('keydown', (event) => {
   const isTyping = /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '');
@@ -1538,6 +1550,7 @@ async function hydrateBase(base, seq) {
 
 async function handleRoute() {
   const parsed = parseRoute();
+  if (parsed.name !== 'season') app.seasonTeamOpen = false;
   const seq = ++app.routeSeq;
   if (parsed.name === 'game') {
     if (!app.currentBase) {
@@ -1622,3 +1635,12 @@ function boot() {
 }
 
 boot();
+
+// Close the custom team picker when tapping anywhere outside it.
+document.addEventListener('click', (event) => {
+  if (!app.seasonTeamOpen) return;
+  if (event.target.closest('[data-team-picker]')) return;
+  if (event.target.closest('[data-action="toggle-team-picker"]')) return;
+  app.seasonTeamOpen = false;
+  if (app.currentBase?.name === 'season') renderCurrent();
+});
