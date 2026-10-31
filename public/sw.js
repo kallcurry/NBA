@@ -1,5 +1,5 @@
 /* COURTSIDE service worker: app-shell cache + network-first updates. */
-const VERSION = 'courtside-v1.2.0';
+const VERSION = 'courtside-v1.3.0';
 const SHELL = [
   '/',
   '/index.html',

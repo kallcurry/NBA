@@ -2,7 +2,7 @@
 
 > 每天，准时坐到场边。一个为 NBA 球迷做的每日比赛台：赛程、实时比分、比赛数据、开赛提醒，以及官方观赛入口。
 
-> **安卓安装包（v1.1.3）**：[Courtside-1.1.3.apk](Courtside-1.1.3.apk) · [release 目录](release/)
+> **安卓安装包（v1.1.4）**：[Courtside-1.1.4.apk](Courtside-1.1.4.apk) · [release 目录](release/)
 
 ![场边 COURTSIDE 桌面端](docs/preview-desktop.jpg)
 
@@ -260,7 +260,7 @@ export ANDROID_HOME=/path/to/android-sdk
 产物：
 
 ```text
-android/dist/courtside-1.1.3.apk
+android/dist/courtside-1.1.4.apk
 ```
 
 1.1.1 修复了 Android 15 / 全面屏手机上顶栏与状态栏重叠的问题，并处理了底部手势条遮挡。
@@ -268,7 +268,7 @@ android/dist/courtside-1.1.3.apk
 安装：
 
 ```bash
-adb install -r android/dist/courtside-1.1.3.apk
+adb install -r android/dist/courtside-1.1.4.apk
 ```
 
 说明：

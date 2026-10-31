@@ -19,6 +19,8 @@ const SEASON = process.env.NBA_SEASON || '2027';
 const TZ = 'Asia/Shanghai';
 const DATA_DIR = path.join(__dirname, 'data');
 const PREFS_FILE = path.join(DATA_DIR, 'preferences.json');
+const SEASON_CACHE_FILE = path.join(DATA_DIR, 'season-schedule.json');
+const SEASON_CACHE_TTL = 60 * 60 * 1000;
 const NOTIFY_ICON = path.join(PUBLIC_DIR, 'assets/icon-192.png');
 
 const MIME = {
@@ -551,7 +553,23 @@ async function getTeamSeasonEvents(teamId) {
 }
 
 async function getSeasonSchedule() {
-  return cached('season-schedule', 60 * 60 * 1000, async () => {
+  return cached('season-schedule', SEASON_CACHE_TTL, async () => {
+    // Survive a server restart: the 30-team aggregation is expensive, so keep
+    // the last successful result on disk and reuse it for an hour.
+    try {
+      const disk = JSON.parse(await readFile(SEASON_CACHE_FILE, 'utf8'));
+      if (
+        disk?.savedAt &&
+        Date.now() - disk.savedAt < SEASON_CACHE_TTL &&
+        Array.isArray(disk.data?.games) &&
+        disk.data.games.length
+      ) {
+        return disk.data;
+      }
+    } catch {
+      /* no disk cache yet */
+    }
+
     const teamData = await getTeams();
     const teams = teamData.teams || [];
     const queue = [...teams];
@@ -586,7 +604,7 @@ async function getSeasonSchedule() {
 
     const phases = {};
     for (const game of games) phases[game.phase] = (phases[game.phase] || 0) + 1;
-    return {
+    const result = {
       season: `${Number(SEASON) - 1}-${String(Number(SEASON)).slice(-2)}`,
       games,
       count: games.length,
@@ -596,6 +614,13 @@ async function getSeasonSchedule() {
       source: 'ESPN',
       fetchedAt: new Date().toISOString(),
     };
+    try {
+      await mkdir(DATA_DIR, { recursive: true });
+      await writeFile(SEASON_CACHE_FILE, JSON.stringify({ savedAt: Date.now(), data: result }), 'utf8');
+    } catch (err) {
+      console.warn('[season] could not save disk cache:', err.message);
+    }
+    return result;
   });
 }
 

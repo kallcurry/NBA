@@ -73,6 +73,8 @@ function memo(key, ttl, producer, force = false) {
 /* ------------------------------------------------------------------ */
 const DAY_PREFIX = 'courtside:day:';
 const DAY_INDEX = 'courtside:day-index';
+const SEASON_CACHE = 'courtside:season:v1';
+const SEASON_CACHE_TTL = 12 * 60 * 60 * 1000;
 
 function readJSON(key) {
   try {
@@ -182,13 +184,27 @@ export function getCalendar() {
 }
 
 export function getSeasonSchedule({ force = false } = {}) {
+  if (!force) {
+    const saved = readJSON(SEASON_CACHE);
+    if (
+      saved?.savedAt &&
+      Date.now() - saved.savedAt < SEASON_CACHE_TTL &&
+      Array.isArray(saved.data?.games) &&
+      saved.data.games.length
+    ) {
+      return Promise.resolve(saved.data);
+    }
+  }
   return memo(
     'season-schedule',
     60 * 60 * 1000,
-    () =>
-      STANDALONE
-        ? espn.getSeasonSchedule()
-        : request('/api/season-schedule', { timeout: 120000 }),
+    async () => {
+      const data = STANDALONE
+        ? await espn.getSeasonSchedule()
+        : await request('/api/season-schedule', { timeout: 120000 });
+      writeJSON(SEASON_CACHE, { savedAt: Date.now(), data });
+      return data;
+    },
     force,
   );
 }

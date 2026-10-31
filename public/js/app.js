@@ -1297,11 +1297,6 @@ document.addEventListener('click', async (event) => {
       refreshSettings();
       break;
     }
-    case 'set-lead':
-      store.updateSettings({ lead: Number(event.target.value) });
-      syncNativeReminders(app.day?.games || [], store);
-      refreshSettings();
-      break;
     case 'set-refresh':
       store.updateSettings({ refresh: Number(target.dataset.value) });
       startPolling();
@@ -1421,6 +1416,7 @@ document.addEventListener('change', (event) => {
   const lead = event.target.closest('[data-action="set-lead"]');
   if (lead) {
     store.updateSettings({ lead: Number(lead.value) });
+    syncNativeReminders(app.day?.games || [], store);
     refreshSettings();
     return;
   }

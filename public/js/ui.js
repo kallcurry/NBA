@@ -118,8 +118,6 @@ export function skeletonsForPage() {
 /* ------------------------------------------------------------------ */
 /* Toast                                                              */
 /* ------------------------------------------------------------------ */
-let toastTimer = 0;
-
 export function toast(message, { type = 'default', duration = 3600 } = {}) {
   const stack = document.getElementById('toast-stack');
   if (!stack) return;
@@ -131,8 +129,9 @@ export function toast(message, { type = 'default', duration = 3600 } = {}) {
   el.querySelector('.toast__text').textContent = message;
   stack.append(el);
   requestAnimationFrame(() => el.classList.add('is-visible'));
-  clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => {
+  // Each toast owns its timer. A shared timer meant a second toast could
+  // cancel the first toast's dismissal and leave it on screen forever.
+  window.setTimeout(() => {
     el.classList.remove('is-visible');
     window.setTimeout(() => el.remove(), 280);
   }, duration);
