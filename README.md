@@ -2,6 +2,8 @@
 
 > 每天，准时坐到场边。一个为 NBA 球迷做的每日比赛台：赛程、实时比分、比赛数据、开赛提醒，以及官方观赛入口。
 
+> **安卓安装包（v1.1.2）**：[Courtside-1.1.2.apk](Courtside-1.1.2.apk) · [release 目录](release/)
+
 ![场边 COURTSIDE 桌面端](docs/preview-desktop.jpg)
 
 ## 为什么做它
