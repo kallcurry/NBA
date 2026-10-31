@@ -1,5 +1,5 @@
 /* COURTSIDE service worker: app-shell cache + network-first updates. */
-const VERSION = 'courtside-v1.1.0';
+const VERSION = 'courtside-v1.2.0';
 const SHELL = [
   '/',
   '/index.html',
@@ -11,6 +11,7 @@ const SHELL = [
   '/js/ui.js',
   '/js/notifications.js',
   '/js/calendar.js',
+  '/js/espn-client.js',
   '/js/player-names.js',
   '/js/components/game-card.js',
   '/js/components/game-detail.js',

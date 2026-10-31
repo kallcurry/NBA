@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="courtside_bg">#0E1526</color>
+    <color name="courtside_surface">#17233D</color>
+    <color name="courtside_accent">#6D8CFF</color>
+</resources>

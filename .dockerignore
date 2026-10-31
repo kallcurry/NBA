@@ -1,4 +1,10 @@
 .git
+.github
+android
 node_modules
 docs
+dist
+*.apk
 *.log
+.env
+.env.*

@@ -2,17 +2,64 @@
 
 import { cnName, fmtTime } from './data.js';
 
+function nativeBridge() {
+  return typeof window !== 'undefined' ? window.CourtsideNative || null : null;
+}
+
+export function isNativeApp() {
+  return Boolean(nativeBridge());
+}
+
 export function notificationsSupported() {
-  return typeof window !== 'undefined' && 'Notification' in window;
+  return isNativeApp() || (typeof window !== 'undefined' && 'Notification' in window);
 }
 
 export function permissionState() {
-  if (!notificationsSupported()) return 'unsupported';
+  const native = nativeBridge();
+  if (native) {
+    try {
+      return native.notificationPermission();
+    } catch {
+      return 'unsupported';
+    }
+  }
+  if (!('Notification' in window)) return 'unsupported';
   return Notification.permission;
 }
 
+const permissionWaiters = new Set();
+
+if (typeof window !== 'undefined') {
+  window.__courtsidePermissionResult = (state) => {
+    for (const resolve of permissionWaiters) resolve(state);
+    permissionWaiters.clear();
+    window.dispatchEvent(new CustomEvent('courtside:notification-permission', { detail: state }));
+  };
+}
+
 export async function requestPermission() {
-  if (!notificationsSupported()) return 'unsupported';
+  const native = nativeBridge();
+  if (native) {
+    const current = permissionState();
+    if (current === 'granted' || current === 'denied') return current;
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (state) => {
+        if (settled) return;
+        settled = true;
+        permissionWaiters.delete(finish);
+        resolve(state);
+      };
+      permissionWaiters.add(finish);
+      try {
+        native.requestNotificationPermission();
+      } catch {
+        finish('denied');
+      }
+      window.setTimeout(() => finish(permissionState()), 15000);
+    });
+  }
+  if (!('Notification' in window)) return 'unsupported';
   if (Notification.permission === 'granted') return 'granted';
   if (Notification.permission === 'denied') return 'denied';
   try {
@@ -24,6 +71,15 @@ export async function requestPermission() {
 
 function fire({ title, body, tag, gameId, force = false }) {
   if (!force && permissionState() !== 'granted') return false;
+  const native = nativeBridge();
+  if (native) {
+    try {
+      native.notifyNow(title, body, gameId || tag || '');
+      return true;
+    } catch {
+      return false;
+    }
+  }
   try {
     const n = new Notification(title, {
       body,
@@ -48,10 +104,92 @@ function fire({ title, body, tag, gameId, force = false }) {
 export function testNotification() {
   return fire({
     title: '场边 · 通知已就绪',
-    body: '开赛前，我们会在这里提醒你。记得保持页面打开。',
+    body: isNativeApp()
+      ? '开赛前，系统会提醒你。App 关闭后也会生效。'
+      : '开赛前，我们会在这里提醒你。记得保持页面打开。',
     tag: 'courtside-test',
     force: true,
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Native Android scheduled reminders                                 */
+/* ------------------------------------------------------------------ */
+const nativeScheduled = new Set();
+
+export function scheduleNativeReminder(game, store) {
+  const native = nativeBridge();
+  if (!native || !game) return false;
+  if (!store.settings.notificationsEnabled) return false;
+  if (game.status?.state !== 'pre') return false;
+  const start = new Date(game.startTime).getTime();
+  const trigger = start - Number(store.settings.lead || 15) * 60000;
+  if (!Number.isFinite(trigger)) return false;
+  const title = '比赛即将开始';
+  const body = `${cnName(game.away)} vs ${cnName(game.home)} · ${fmtTime(game.startTime)} · 北京时间`;
+  try {
+    if (trigger <= Date.now() + 1500) {
+      native.notifyNow(title, body, String(game.id));
+    } else {
+      native.scheduleReminder(String(game.id), title, body, trigger, String(game.id));
+    }
+    nativeScheduled.add(String(game.id));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function cancelNativeReminder(gameId) {
+  const native = nativeBridge();
+  if (!native || gameId == null) return;
+  try {
+    native.cancelReminder(String(gameId));
+  } catch {
+    /* ignore */
+  }
+  nativeScheduled.delete(String(gameId));
+}
+
+export function cancelAllNativeReminders() {
+  const native = nativeBridge();
+  if (!native) return;
+  try {
+    native.cancelAllReminders();
+  } catch {
+    /* ignore */
+  }
+  nativeScheduled.clear();
+}
+
+function hydrateNativeScheduled(native) {
+  if (nativeScheduled.size || !native?.scheduledIds) return;
+  try {
+    for (const id of String(native.scheduledIds() || '').split(',')) {
+      if (id) nativeScheduled.add(id);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+export function syncNativeReminders(games = [], store) {
+  const native = nativeBridge();
+  if (!native || !store?.settings?.notificationsEnabled) return 0;
+  hydrateNativeScheduled(native);
+  const desired = new Set();
+  for (const game of games) {
+    const explicit = store.hasReminder(game.id);
+    const favorite = involvesFavorite(game, store.favorites);
+    const relevant = explicit || (store.settings.start && favorite);
+    if (!relevant || game.status?.state !== 'pre') continue;
+    desired.add(String(game.id));
+    if (!nativeScheduled.has(String(game.id))) scheduleNativeReminder(game, store);
+  }
+  for (const id of [...nativeScheduled]) {
+    if (!desired.has(id)) cancelNativeReminder(id);
+  }
+  return desired.size;
 }
 
 function involvesFavorite(game, favorites) {
@@ -84,6 +222,7 @@ export function checkNotifications({
 
     if (
       settings.start &&
+      !isNativeApp() &&
       game.status.state === 'pre' &&
       minutesToStart <= Number(settings.lead || 15) &&
       minutesToStart > -10

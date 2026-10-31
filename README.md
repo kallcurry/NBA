@@ -47,6 +47,7 @@
 ### 提醒
 - 浏览器通知：开赛前 5–120 分钟提醒、完场比分、关键比分（末节/加时 5 分以内）。
 - 单场比赛可以单独点铃铛设置提醒。
+- **Android APK 使用原生 `AlarmManager` 排程**：设置好后关掉 App，到点仍会弹系统通知；重启手机后会自动恢复。
 - 所有偏好保存在本机 `localStorage`，不需要账号。
 - 可安装为 PWA，从桌面直接打开。
 
@@ -110,14 +111,13 @@ NBA 官方比赛日按美国东部时间划分，而中国球迷说的“今天�
 - 浏览器离线时展示最近一次成功缓存的比赛日快照。
 
 ### 提醒的现实边界
-这是一个本地优先的网页应用，通知由页面里的定时检查触发：
 
-- 需要浏览器通知权限；
-- 需要页面保持打开（可以安装成 PWA 或固定标签页）；
-- 浏览器完全退出后，本地提醒无法唤醒；
+**网页 / PWA**：通知由页面里的定时检查触发，需要页面保持打开；浏览器完全退出后无法唤醒。
+
+**Android APK**：开赛提醒由系统 `AlarmManager` 排程，App 关闭后仍能触发；需要通知权限，Android 12+ 最好允许“闹钟和提醒”权限。当前只做**本地定时提醒**，实时比分推送仍需要服务端 FCM/Web Push。
+
 - 不收集、不上传任何个人数据。
-
-如果要做“关掉网页也能收到推送”，需要服务端 Web Push（VAPID）和用户订阅，当前版本没有引入后端账号体系。
+- App 被用户“强行停止”后，Android 会取消它的闹钟，需要重新打开一次 App。
 
 ## 项目结构
 
@@ -125,6 +125,11 @@ NBA 官方比赛日按美国东部时间划分，而中国球迷说的“今天�
 .
 ├── server.mjs                 # 零依赖静态服务器 + ESPN 数据代理 + 归一化
 ├── package.json
+├── docker-compose.yml         # 本地 / 服务器 Docker 部署
+├── .github/workflows/docker.yml # CI、GHCR 镜像、APK 自动构建
+├── android/                   # 原生 WebView APK + AlarmManager 提醒
+│   ├── build-apk.sh           # 不依赖 Gradle 的 APK 构建脚本
+│   └── app/src/main/          # Manifest、Activity、Receiver
 ├── public/
 │   ├── index.html             # 壳、SVG 图标 sprite
 │   ├── manifest.webmanifest   # PWA
@@ -137,7 +142,8 @@ NBA 官方比赛日按美国东部时间划分，而中国球迷说的“今天�
 │       ├── store.js           # 关注、提醒、设置持久化
 │       ├── data.js            # 中文队名、平台、时间与颜色工具
 │       ├── ui.js              # 通用 UI、弹层、Toast
-│       ├── notifications.js   # 浏览器通知
+│       ├── notifications.js   # 浏览器通知 + Android 原生桥
+│       ├── espn-client.js     # APK 独立模式：直连 ESPN
 │       ├── calendar.js        # .ics 导出
 │       ├── components/        # 比赛卡片、比赛详情
 │       └── views/             # 今日、赛程、球队、指南、设置
@@ -176,14 +182,76 @@ NBA 官方比赛日按美国东部时间划分，而中国球迷说的“今天�
 HOST=0.0.0.0 PORT=4321 npm start
 ```
 
-### Docker
+### Docker Compose
 
 ```bash
-docker build -t courtside .
-docker run --rm -p 4321:4321 courtside
+cp .env.example .env
+docker compose up -d --build
+docker compose logs -f
 ```
 
-> 提醒：部署到 HTTPS 域名后，浏览器通知和 PWA 安装才能完整工作。`localhost` 也被视为安全上下文。
+默认地址：<http://127.0.0.1:4321>。停止：
+
+```bash
+docker compose down
+```
+
+使用 GitHub Actions 发布到 GHCR 的镜像：
+
+```bash
+COURTSIDE_IMAGE=ghcr.io/kallcurry/nba:latest docker compose up -d --pull always
+```
+
+如果 GHCR 包是私有的，先执行：
+
+```bash
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u kallcurry --password-stdin
+```
+
+### 自动构建
+
+`.github/workflows/docker.yml` 会在 push 到 `main`、打 `v*` tag 或手动触发时：
+
+1. 校验 JS 语法；
+2. 启动 Node 服务并 smoke test；
+3. `docker compose config` 校验；
+4. 构建 Docker 镜像并启动容器做健康检查；
+5. 自动构建 Android APK，上传 `courtside-apk` artifact；
+6. 非 PR 构建时，把多架构镜像推送到 GHCR：
+   - `ghcr.io/kallcurry/nba:latest`
+   - `ghcr.io/kallcurry/nba:main`
+   - `ghcr.io/kallcurry/nba:sha-<commit>`
+   - 打 tag 时额外生成版本标签。
+
+> 部署到 HTTPS 域名后，网页通知和 PWA 安装才能完整工作。`localhost` 也被视为安全上下文。
+
+### Android APK
+
+`android/` 是一个独立的 WebView 壳，打包了 `public/`，所以不需要在手机上跑 Node 服务。它使用 `site.web.api.espn.com` 直连数据，并通过原生桥接实现关掉 App 后的开赛提醒。
+
+```bash
+export JAVA_HOME=/path/to/jdk17+
+export ANDROID_HOME=/path/to/android-sdk
+./android/build-apk.sh
+```
+
+产物：
+
+```text
+android/dist/courtside-1.1.0.apk
+```
+
+安装：
+
+```bash
+adb install -r android/dist/courtside-1.1.0.apk
+```
+
+说明：
+
+- 当前 APK 使用 debug keystore 签名，适合个人安装；上架应用商店需要换成正式 release keystore。
+- Android 13+ 会请求通知权限；Android 12+ 建议允许“闹钟和提醒”，否则提醒可能被系统延后。
+- 手机网络无法直连 ESPN 时，APK 的数据会加载失败；此时请使用 Node 服务器版本，或把数据请求改成你自己的代理地址。
 
 ## 数据与版权
 

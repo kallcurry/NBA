@@ -14,16 +14,21 @@ function switchRow({ key, title, desc, on, disabled = false }) {
 }
 
 function permissionCard(permission, enabled) {
+  const nativeApp = typeof window !== 'undefined' && Boolean(window.CourtsideNative);
   if (permission === 'unsupported') {
     return `<div class="permission-card is-warn">${icon('info')}<div><strong>当前浏览器不支持通知</strong><p>可以继续使用比分和赛程功能；换用 Chrome、Edge 或 Safari 可开启提醒。</p></div></div>`;
   }
   if (permission === 'denied') {
-    return `<div class="permission-card is-warn">${icon('bell')}<div><strong>通知被浏览器拦截</strong><p>点击地址栏左侧的站点图标，把“通知”改为允许，然后刷新页面。</p></div></div>`;
+    return `<div class="permission-card is-warn">${icon('bell')}<div><strong>通知权限被拒绝</strong><p>${
+      nativeApp
+        ? '请在系统设置 → 应用 → 场边 NBA → 通知中允许。'
+        : '点击地址栏左侧的站点图标，把“通知”改为允许，然后刷新页面。'
+    }</p></div></div>`;
   }
   if (permission === 'granted' && enabled) {
     return `<div class="permission-card is-ok">${icon('check')}<div><strong>通知已开启</strong><p>开赛前会按你的设置弹出提醒。请保持页面打开，或安装到桌面。</p></div><button class="text-link" data-action="disable-notifications">暂停</button></div>`;
   }
-  return `<div class="permission-card">${icon('bell')}<div><strong>开启浏览器通知</strong><p>授权后，场边才能在开赛前提醒你。通知只在本机处理，不会上传。</p></div><button class="btn btn--primary btn--sm" data-action="enable-notifications">开启通知</button></div>`;
+  return `<div class="permission-card">${icon('bell')}<div><strong>开启通知</strong><p>授权后，场边才能在开赛前提醒你。通知只在本机处理，不会上传。</p></div><button class="btn btn--primary btn--sm" data-action="enable-notifications">开启通知</button></div>`;
 }
 
 function remindersList(store, day, games) {

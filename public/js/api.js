@@ -1,4 +1,8 @@
 /* API client with small in-memory caches and an offline day snapshot. */
+import * as espn from './espn-client.js';
+
+const STANDALONE =
+  typeof location !== 'undefined' && new URLSearchParams(location.search).has('standalone');
 
 const MEMORY_TTL = {
   day: 7000,
@@ -124,7 +128,9 @@ export function getScoreboard(date, { force = false } = {}) {
     `day:${date}`,
     MEMORY_TTL.day,
     async () => {
-      const day = await request(`/api/scoreboard?date=${encodeURIComponent(date)}&_=${Date.now()}`);
+      const day = STANDALONE
+        ? await espn.getDay(date)
+        : await request(`/api/scoreboard?date=${encodeURIComponent(date)}&_=${Date.now()}`);
       rememberDay(day);
       return day;
     },
@@ -136,34 +142,46 @@ export function getGame(id, { force = false } = {}) {
   return memo(
     `game:${id}`,
     MEMORY_TTL.game,
-    () => request(`/api/game?id=${encodeURIComponent(id)}&_=${Date.now()}`),
+    () =>
+      STANDALONE
+        ? espn.getGame(id)
+        : request(`/api/game?id=${encodeURIComponent(id)}&_=${Date.now()}`),
     force,
   );
 }
 
 export function getTeams() {
-  return memo('teams', MEMORY_TTL.teams, () => request('/api/teams'));
+  return memo('teams', MEMORY_TTL.teams, () => (STANDALONE ? espn.getTeams() : request('/api/teams')));
 }
 
 export function getStandings() {
-  return memo('standings', MEMORY_TTL.standings, () => request('/api/standings'));
+  return memo('standings', MEMORY_TTL.standings, () =>
+    STANDALONE ? espn.getStandings() : request('/api/standings'),
+  );
 }
 
 export function getTeamSchedule(teamId) {
   return memo(
     `team-schedule:${teamId}`,
     MEMORY_TTL.teamSchedule,
-    () => request(`/api/team-schedule?team=${encodeURIComponent(teamId)}`),
+    () =>
+      STANDALONE
+        ? espn.getTeamSchedule(teamId)
+        : request(`/api/team-schedule?team=${encodeURIComponent(teamId)}`),
   );
 }
 
 export function getNews() {
-  return memo('news', MEMORY_TTL.news, () => request('/api/news'));
+  return memo('news', MEMORY_TTL.news, () => (STANDALONE ? espn.getNews() : request('/api/news')));
 }
 
 export function getCalendar() {
-  return memo('calendar', MEMORY_TTL.calendar, () => request('/api/calendar'));
+  return memo('calendar', MEMORY_TTL.calendar, () =>
+    STANDALONE ? espn.getCalendar() : request('/api/calendar'),
+  );
 }
+
+export { STANDALONE };
 
 export function seedMemoryDay(day) {
   if (!day?.date) return;

@@ -36,12 +36,20 @@ import {
   resetDetailUi,
 } from './components/game-detail.js';
 import {
+  cancelAllNativeReminders,
+  cancelNativeReminder,
   checkNotifications,
+  isNativeApp,
   permissionState,
   requestPermission,
+  scheduleNativeReminder,
+  syncNativeReminders,
   testNotification,
 } from './notifications.js';
 import { downloadDayICS, downloadGameICS } from './calendar.js';
+
+const STANDALONE =
+  typeof location !== 'undefined' && new URLSearchParams(location.search).has('standalone');
 
 const app = {
   currentBase: null,
@@ -485,6 +493,7 @@ function applyDay(day) {
   }
   try {
     checkNotifications({ games: day.games, store });
+    syncNativeReminders(day.games, store);
   } catch (err) {
     console.warn('notification check failed', err);
   }
@@ -1015,6 +1024,7 @@ function toggleFavorite(abbr) {
   });
   renderShell();
   renderCurrent();
+  syncNativeReminders(app.day?.games || [], store);
   if (app.teamHandle && app.teamState?.abbr === abbr) paintTeamSheet();
   if (app.settingsHandle) refreshSettings();
 }
@@ -1032,14 +1042,21 @@ function toggleReminder(id, date) {
   };
   const on = store.toggleReminder(id, date || beijingDateOf(game.startTime), meta);
   if (on) {
+    scheduleNativeReminder(game, store);
     if (permissionState() === 'default' && !store.settings.notificationsEnabled) {
-      toast('提醒已添加。开启浏览器通知后才会弹出。', { duration: 5000 });
+      toast(
+        isNativeApp()
+          ? '提醒已添加。开启系统通知后才会弹出。'
+          : '提醒已添加。开启浏览器通知后才会弹出。',
+        { duration: 5000 },
+      );
     } else if (permissionState() === 'denied') {
-      toast('提醒已添加，但通知被浏览器拦截了。', { type: 'error', duration: 5000 });
+      toast('提醒已添加，但通知权限被拒绝了。', { type: 'error', duration: 5000 });
     } else {
       toast('已设置开赛提醒', { type: 'success' });
     }
   } else {
+    cancelNativeReminder(id);
     toast('已取消提醒');
   }
   renderShell();
@@ -1055,11 +1072,25 @@ async function enableNotifications() {
     toast('通知已开启', { type: 'success' });
     try {
       checkNotifications({ games: app.day?.games || [], store });
+      syncNativeReminders(app.day?.games || [], store);
+      if (
+        isNativeApp() &&
+        window.CourtsideNative?.canScheduleExactAlarms &&
+        !window.CourtsideNative.canScheduleExactAlarms()
+      ) {
+        toast('为了保证准时提醒，请在系统设置中允许“闹钟和提醒”。', { duration: 6000 });
+        window.setTimeout(() => window.CourtsideNative.requestExactAlarmPermission?.(), 900);
+      }
     } catch {
       /* ignore */
     }
   } else if (result === 'denied') {
-    toast('通知权限被拒绝，请在浏览器站点设置中修改', { type: 'error', duration: 5000 });
+    toast(
+      isNativeApp()
+        ? '通知权限被拒绝，请在系统设置 → 应用 → 场边 NBA → 通知中开启'
+        : '通知权限被拒绝，请在浏览器站点设置中修改',
+      { type: 'error', duration: 5000 },
+    );
   } else if (result === 'unsupported') {
     toast('当前浏览器不支持通知', { type: 'error' });
   }
@@ -1067,6 +1098,7 @@ async function enableNotifications() {
 }
 
 function clearAllData() {
+  cancelAllNativeReminders();
   store.clearAll();
   if (app.confirmHandle) {
     closeOverlay(app.confirmHandle, { silent: true });
@@ -1192,6 +1224,7 @@ document.addEventListener('click', async (event) => {
     case 'disable-notifications':
       event.preventDefault();
       store.updateSettings({ notificationsEnabled: false });
+      cancelAllNativeReminders();
       refreshSettings();
       toast('通知已暂停');
       break;
@@ -1199,11 +1232,13 @@ document.addEventListener('click', async (event) => {
       const key = target.dataset.key;
       if (!key) break;
       store.updateSettings({ [key]: !store.settings[key] });
+      syncNativeReminders(app.day?.games || [], store);
       refreshSettings();
       break;
     }
     case 'set-lead':
       store.updateSettings({ lead: Number(event.target.value) });
+      syncNativeReminders(app.day?.games || [], store);
       refreshSettings();
       break;
     case 'set-refresh':
@@ -1412,6 +1447,7 @@ function normalizeHash() {
 }
 
 function registerServiceWorker() {
+  if (STANDALONE) return;
   if (!('serviceWorker' in navigator)) return;
   if (!/^https?:$/.test(location.protocol)) return;
   window.addEventListener('load', () => {
