@@ -151,6 +151,27 @@ export function cancelNativeReminder(gameId) {
   nativeScheduled.delete(String(gameId));
 }
 
+export function scheduleNativeTestAlarm() {
+  const native = nativeBridge();
+  if (!native?.scheduleTestAlarm) return false;
+  try {
+    native.scheduleTestAlarm();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function nativeScheduledCount() {
+  const native = nativeBridge();
+  if (!native?.scheduledCount) return 0;
+  try {
+    return Number(native.scheduledCount()) || 0;
+  } catch {
+    return 0;
+  }
+}
+
 export function cancelAllNativeReminders() {
   const native = nativeBridge();
   if (!native) return;
@@ -178,7 +199,9 @@ export function syncNativeReminders(games = [], store) {
   if (!native || !store?.settings?.notificationsEnabled) return 0;
   hydrateNativeScheduled(native);
   const desired = new Set();
+  const visible = new Set();
   for (const game of games) {
+    visible.add(String(game.id));
     const explicit = store.hasReminder(game.id);
     const favorite = involvesFavorite(game, store.favorites);
     const relevant = explicit || (store.settings.start && favorite);
@@ -186,8 +209,12 @@ export function syncNativeReminders(games = [], store) {
     desired.add(String(game.id));
     if (!nativeScheduled.has(String(game.id))) scheduleNativeReminder(game, store);
   }
+  // Only prune reminders for games in the currently loaded day. Explicit
+  // reminders for future dates are intentionally kept alive while the user
+  // browses another day; otherwise opening the app would silently cancel
+  // tomorrow's alarm. Removing a bell still calls cancelNativeReminder().
   for (const id of [...nativeScheduled]) {
-    if (!desired.has(id)) cancelNativeReminder(id);
+    if (visible.has(id) && !desired.has(id)) cancelNativeReminder(id);
   }
   return desired.size;
 }

@@ -6906,3 +6906,14 @@ ol {
     text-overflow: ellipsis;
   }
 }
+
+.native-alarm-row {
+  margin-top: 8px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.018);
+}
+.native-alarm-row .btn {
+  white-space: nowrap;
+}

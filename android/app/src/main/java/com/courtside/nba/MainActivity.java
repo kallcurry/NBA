@@ -70,7 +70,7 @@ public class MainActivity extends Activity {
         settings.setDisplayZoomControls(false);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
-        settings.setUserAgentString(settings.getUserAgentString() + " CourtsideAndroid/1.1.7");
+        settings.setUserAgentString(settings.getUserAgentString() + " CourtsideAndroid/1.1.8");
 
         webView.addJavascriptInterface(new NativeBridge(), "CourtsideNative");
         webView.setWebViewClient(new LocalWebViewClient());
@@ -229,6 +229,26 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public int scheduledCount() {
+            String ids = ReminderStore.ids(MainActivity.this);
+            if (ids == null || ids.isEmpty()) return 0;
+            return ids.split(",").length;
+        }
+
+        @JavascriptInterface
+        public void scheduleTestAlarm() {
+            long triggerAt = System.currentTimeMillis() + 60_000L;
+            ReminderStore.schedule(
+                    MainActivity.this,
+                    "test-alarm-" + triggerAt,
+                    "场边测试提醒",
+                    "这是 1 分钟后触发的系统提醒；App 关闭也应该收到。",
+                    triggerAt,
+                    ""
+            );
+        }
+
+        @JavascriptInterface
         public void cancelReminder(String id) {
             ReminderStore.cancel(MainActivity.this, id);
         }
@@ -245,7 +265,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public String appVersion() {
-            return "1.1.7";
+            return "1.1.8";
         }
 
         @JavascriptInterface
