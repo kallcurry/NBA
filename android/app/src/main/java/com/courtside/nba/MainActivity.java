@@ -229,6 +229,26 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public int scheduledCount() {
+            String ids = ReminderStore.ids(MainActivity.this);
+            if (ids == null || ids.isEmpty()) return 0;
+            return ids.split(",").length;
+        }
+
+        @JavascriptInterface
+        public void scheduleTestAlarm() {
+            long triggerAt = System.currentTimeMillis() + 60_000L;
+            ReminderStore.schedule(
+                    MainActivity.this,
+                    "test-alarm-" + triggerAt,
+                    "场边测试提醒",
+                    "这是 1 分钟后触发的系统提醒；App 关闭也应该收到。",
+                    triggerAt,
+                    ""
+            );
+        }
+
+        @JavascriptInterface
         public void cancelReminder(String id) {
             ReminderStore.cancel(MainActivity.this, id);
         }

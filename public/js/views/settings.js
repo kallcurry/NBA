@@ -2,7 +2,11 @@
 
 import { cnName, fmtTime, relativeDay } from '../data.js';
 import { icon } from '../ui.js';
-import { permissionState, reminderLeadLabel } from '../notifications.js';
+import {
+  nativeScheduledCount,
+  permissionState,
+  reminderLeadLabel,
+} from '../notifications.js';
 
 function switchRow({ key, title, desc, on, disabled = false }) {
   return `<div class="setting-row">
@@ -26,7 +30,11 @@ function permissionCard(permission, enabled) {
     }</p></div></div>`;
   }
   if (permission === 'granted' && enabled) {
-    return `<div class="permission-card is-ok">${icon('check')}<div><strong>通知已开启</strong><p>开赛前会按你的设置弹出提醒。请保持页面打开，或安装到桌面。</p></div><button class="text-link" data-action="disable-notifications">暂停</button></div>`;
+    return `<div class="permission-card is-ok">${icon('check')}<div><strong>通知已开启</strong><p>${
+      nativeApp
+        ? '开赛提醒由系统闹钟触发，关闭 App 也会生效。'
+        : '开赛前会按你的设置弹出提醒。请保持页面打开，或安装到桌面。'
+    }</p></div><button class="text-link" data-action="disable-notifications">暂停</button></div>`;
   }
   return `<div class="permission-card">${icon('bell')}<div><strong>开启通知</strong><p>授权后，场边才能在开赛前提醒你。通知只在本机处理，不会上传。</p></div><button class="btn btn--primary btn--sm" data-action="enable-notifications">开启通知</button></div>`;
 }
@@ -127,8 +135,20 @@ export function renderSettings({
         </div>
         <div class="settings-actions">
           <button class="btn btn--ghost btn--sm" data-action="test-notification">${icon('bell')}发一条测试通知</button>
-          <span class="settings-hint">${icon('info')}页面关闭后提醒会停止</span>
+          <span class="settings-hint">${icon('info')}${
+            typeof window !== 'undefined' && window.CourtsideNative
+              ? '实时比分推送仍需服务端；开赛闹钟关闭 App 后有效'
+              : '页面关闭后提醒会停止'
+          }</span>
         </div>
+        ${
+          typeof window !== 'undefined' && window.CourtsideNative
+            ? `<div class="setting-row native-alarm-row">
+                <div class="setting-row__copy"><strong>系统闹钟</strong><span>已排程 ${nativeScheduledCount()} 个；测试后请退出 App，等 1 分钟。</span></div>
+                <button class="btn btn--ghost btn--sm" data-action="test-native-alarm">${icon('clock')}1 分钟后测试</button>
+              </div>`
+            : ''
+        }
       </section>
 
       <section class="settings-section">

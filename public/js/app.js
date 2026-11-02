@@ -44,6 +44,7 @@ import {
   permissionState,
   requestPermission,
   scheduleNativeReminder,
+  scheduleNativeTestAlarm,
   syncNativeReminders,
   testNotification,
 } from './notifications.js';
@@ -1364,6 +1365,21 @@ document.addEventListener('click', async (event) => {
       startPolling();
       refreshSettings();
       break;
+    case 'test-native-alarm': {
+      const result = await requestPermission();
+      if (result !== 'granted') {
+        toast('请先允许通知权限', { type: 'error' });
+        refreshSettings();
+        break;
+      }
+      const ok = scheduleNativeTestAlarm();
+      toast(ok ? '已排程：1 分钟后触发。现在可以退出 App 等待。' : '系统闹钟排程失败', {
+        type: ok ? 'success' : 'error',
+        duration: 6000,
+      });
+      refreshSettings();
+      break;
+    }
     case 'test-notification': {
       const result = await requestPermission();
       if (result !== 'granted') {
