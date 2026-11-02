@@ -1,7 +1,7 @@
 # 场边 NBA · Android APK
 
-- 最新文件：`courtside-1.1.8.apk`
-- 版本：1.1.8（versionCode 9）
+- 最新文件：`courtside-1.1.9.apk`
+- 版本：1.1.9（versionCode 10）
 - 包名：`com.courtside.nba`
 - 最低系统：Android 8.0 / API 26
 - 大小：约 448 KB
@@ -25,7 +25,7 @@
 手机允许“安装未知来源应用”后直接打开 APK，或：
 
 ```bash
-adb install -r courtside-1.1.8.apk
+adb install -r courtside-1.1.9.apk
 ```
 
 已安装旧版本可以直接覆盖安装，数据会保留。

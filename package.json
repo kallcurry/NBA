@@ -1,6 +1,6 @@
 {
   "name": "courtside-nba",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "private": true,
   "type": "module",
   "description": "场边 COURTSIDE — 每天为你整理 NBA 赛程、实时比分、比赛数据与官方观赛入口。",
@@ -13,6 +13,12 @@
   "engines": {
     "node": ">=20"
   },
-  "keywords": ["nba", "basketball", "scores", "dashboard", "pwa"],
+  "keywords": [
+    "nba",
+    "basketball",
+    "scores",
+    "dashboard",
+    "pwa"
+  ],
   "license": "MIT"
 }
